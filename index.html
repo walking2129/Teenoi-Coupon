@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Teenoi Coupon - MK780944</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#f2f2f2;font-family:Arial,"Noto Sans Thai",sans-serif;display:flex;justify-content:center;align-items:center;padding:18px}
+.card{width:min(430px,100%);background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 10px 35px #0002}
+.head{background:#d71920;color:#fff;text-align:center;padding:22px 18px;font-weight:800;font-size:25px}
+.body{text-align:center;padding:24px 22px 28px}
+.badge{display:inline-block;background:#fff1f1;color:#d71920;border-radius:999px;padding:7px 14px;font-weight:700;margin-bottom:14px}
+#qrcode{display:flex;justify-content:center;margin:12px auto 18px;min-height:230px}
+#qrcode img,#qrcode canvas{width:230px!important;height:230px!important}
+.code{font-size:25px;font-weight:800;letter-spacing:2px;margin:8px 0}
+.timer{font-size:18px;font-weight:700;margin:10px 0 22px}
+.swipe{height:58px;border:0;border-radius:29px;background:#111;color:#fff;width:100%;font-size:17px;font-weight:800;touch-action:none;cursor:pointer}
+.status{margin-top:14px;font-weight:700;color:#666}.used .swipe{background:#777}.used .timer{color:#777}
+.note{font-size:12px;color:#888;margin-top:16px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+<div class="head">TEENOI COUPON</div>
+<div class="body">
+<div class="badge">GOLD COUPON</div>
+<div id="qrcode"></div>
+<div class="code">MK780944</div>
+<div class="timer" id="timer">02:00:00</div>
+<button class="swipe" id="useBtn">PRESS USED</button>
+<div class="status" id="status">ยังไม่ได้ใช้</div>
+<div class="note">QR นี้เข้ารหัสรหัสคูปอง MK780944 โดยตรง</div>
+</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const CODE="MK780944", KEY="teenoi_coupon_"+CODE;
+new QRCode(document.getElementById("qrcode"),{text:CODE,width:230,height:230,colorDark:"#000000",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.H});
+const card=document.getElementById("card"),btn=document.getElementById("useBtn"),status=document.getElementById("status"),timer=document.getElementById("timer");
+let used=localStorage.getItem(KEY)==="used";
+function render(){card.classList.toggle("used",used);btn.textContent=used?"PRESS AGAIN":"PRESS USED";status.textContent=used?"ใช้แล้ว":"ยังไม่ได้ใช้"}
+btn.addEventListener("click",()=>{used=!used;localStorage.setItem(KEY,used?"used":"active");render()});
+let end=Date.now()+7200000;
+function tick(){let s=Math.max(0,Math.floor((end-Date.now())/1000)),h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;timer.textContent=[h,m,x].map(v=>String(v).padStart(2,"0")).join(":")}
+setInterval(tick,1000);tick();render();
+</script>
+</body>
+</html>
