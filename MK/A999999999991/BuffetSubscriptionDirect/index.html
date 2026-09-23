@@ -66,8 +66,7 @@ function decoratePage3(stage, img) {
   const H = img.naturalHeight || img.height;
   if (!W || !H) return;
 
-  // Decode on a bounded canvas for speed, then map coordinates back to the full image.
-  const maxW = 1600;
+  const maxW = 1800;
   const scale = Math.min(1, maxW / W);
   const cw = Math.max(1, Math.round(W * scale));
   const ch = Math.max(1, Math.round(H * scale));
@@ -79,9 +78,7 @@ function decoratePage3(stage, img) {
   ctx.drawImage(img, 0, 0, cw, ch);
 
   const imageData = ctx.getImageData(0, 0, cw, ch);
-  const decoded = window.jsQR(imageData.data, cw, ch, {
-    inversionAttempts: 'attemptBoth'
-  });
+  const decoded = window.jsQR(imageData.data, cw, ch, {inversionAttempts:'attemptBoth'});
   if (!decoded || !decoded.location) return;
 
   const pts = [
@@ -90,38 +87,31 @@ function decoratePage3(stage, img) {
     decoded.location.bottomRightCorner,
     decoded.location.bottomLeftCorner
   ];
-
   const xs = pts.map(p => p.x / scale);
   const ys = pts.map(p => p.y / scale);
   const qx = Math.min.apply(null, xs);
   const qy = Math.min.apply(null, ys);
   const qrW = Math.max.apply(null, xs) - qx;
   const qrH = Math.max.apply(null, ys) - qy;
-  if (!(qrW > 20 && qrH > 20)) return;
+  if (!(qrW > 50 && qrH > 50)) return;
 
-  // Small margin covers the original QR's quiet zone while preserving its exact footprint.
-  const padX = qrW * 0.035;
-  const padY = qrH * 0.035;
-  const coverX = Math.max(0, qx - padX);
-  const coverY = Math.max(0, qy - padY);
-  const coverW = Math.min(W - coverX, qrW + padX * 2);
-  const coverH = Math.min(H - coverY, qrH + padY * 2);
-
+  // Replace only the original QR's own rectangle.
   const qrCover = document.createElement('div');
   qrCover.className = 'page3-overlay';
-  qrCover.style.left = (coverX / W * 100) + '%';
-  qrCover.style.top = (coverY / H * 100) + '%';
-  qrCover.style.width = (coverW / W * 100) + '%';
-  qrCover.style.height = (coverH / H * 100) + '%';
+  qrCover.style.left = (qx / W * 100) + '%';
+  qrCover.style.top = (qy / H * 100) + '%';
+  qrCover.style.width = (qrW / W * 100) + '%';
+  qrCover.style.height = (qrH / H * 100) + '%';
   qrCover.style.background = '#fff';
+  qrCover.style.overflow = 'hidden';
   qrCover.style.display = 'flex';
   qrCover.style.alignItems = 'center';
   qrCover.style.justifyContent = 'center';
   stage.appendChild(qrCover);
 
   const qrHost = document.createElement('div');
-  qrHost.style.width = (qrW / coverW * 100) + '%';
-  qrHost.style.height = (qrH / coverH * 100) + '%';
+  qrHost.style.width = '100%';
+  qrHost.style.height = '100%';
   qrHost.style.background = '#fff';
   qrHost.style.lineHeight = '0';
   qrCover.appendChild(qrHost);
@@ -145,68 +135,38 @@ function decoratePage3(stage, img) {
     el.style.imageRendering = 'pixelated';
   });
 
-  // Detect the first dark text band immediately below the QR; this is the old coupon code.
-  // Cover only that band and draw the new code at the same visual height.
-  const scan = ctx;
-  const startY = Math.min(ch - 1, Math.floor((qy + qrH * 1.02) * scale));
-  const endY = Math.min(ch - 1, Math.floor((qy + qrH + H * 0.13) * scale));
-  let runStart = -1, runEnd = -1;
-  const x0 = Math.floor(cw * 0.12);
-  const x1 = Math.floor(cw * 0.88);
-  const minDark = Math.max(8, Math.floor((x1 - x0) * 0.0025));
-
-  for (let y = startY; y <= endY; y++) {
-    let dark = 0;
-    for (let x = x0; x < x1; x += 2) {
-      const i = (y * cw + x) * 4;
-      const lum = 0.299 * imageData.data[i] + 0.587 * imageData.data[i+1] + 0.114 * imageData.data[i+2];
-      if (lum < 95 && imageData.data[i+3] > 180) dark++;
-    }
-    const hit = dark >= minDark;
-    if (hit && runStart < 0) runStart = y;
-    if (!hit && runStart >= 0) {
-      if (y - runStart >= Math.max(2, Math.floor(ch * 0.003))) {
-        runEnd = y - 1;
-        break;
-      }
-      runStart = -1;
-    }
-  }
-  if (runStart >= 0 && runEnd < 0) runEnd = endY;
-
-  const bandTopPx = runStart >= 0 ? runStart / scale : qy + qrH + H * 0.012;
-  const bandBottomPx = runEnd >= 0 ? runEnd / scale : qy + qrH + H * 0.045;
-  const bandH = Math.max(24, bandBottomPx - bandTopPx);
-  const coverTop = Math.max(0, bandTopPx - bandH * 0.45);
-  const coverBottom = Math.min(H, bandBottomPx + bandH * 0.7);
+  // The original code sits immediately below the QR. Replace only a narrow strip there,
+  // leaving the rest of the artwork completely untouched.
+  const codeTop = qy + qrH + Math.max(8, qrH * 0.025);
+  const codeH = Math.max(24, qrH * 0.095);
 
   const codeCover = document.createElement('div');
   codeCover.className = 'page3-overlay';
-  codeCover.style.left = '8%';
-  codeCover.style.top = (coverTop / H * 100) + '%';
-  codeCover.style.width = '84%';
-  codeCover.style.height = ((coverBottom - coverTop) / H * 100) + '%';
+  codeCover.style.left = (qx / W * 100 - 1.5) + '%';
+  codeCover.style.top = (codeTop / H * 100) + '%';
+  codeCover.style.width = (qrW / W * 100 + 3) + '%';
+  codeCover.style.height = (codeH / H * 100) + '%';
   codeCover.style.background = '#fff';
   codeCover.style.display = 'flex';
   codeCover.style.alignItems = 'center';
   codeCover.style.justifyContent = 'center';
+  codeCover.style.overflow = 'hidden';
   stage.appendChild(codeCover);
 
   const code = document.createElement('div');
   code.textContent = NEW_CODE;
-  code.style.width = '100%';
-  code.style.textAlign = 'center';
   code.style.color = '#000';
   code.style.fontFamily = 'Arial, Helvetica, sans-serif';
   code.style.fontWeight = '800';
-  code.style.fontSize = Math.max(16, Math.min(46, bandH * 0.96)) + 'px';
+  code.style.fontSize = Math.max(14, Math.min(44, codeH * 0.75)) + 'px';
   code.style.lineHeight = '1';
-  code.style.letterSpacing = Math.max(0.3, Math.min(2.2, bandH * 0.045)) + 'px';
-  code.style.fontVariantNumeric = 'tabular-nums';
+  code.style.letterSpacing = '0.5px';
   code.style.whiteSpace = 'nowrap';
+  code.style.textAlign = 'center';
+  code.style.width = '100%';
+  code.style.marginTop = '1px';
   codeCover.appendChild(code);
 }
-
 function showLoading(nextPage, push) {
   const loader = document.createElement('div');
   loader.className = 'loading';
