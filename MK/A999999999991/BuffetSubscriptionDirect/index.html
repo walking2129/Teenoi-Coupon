@@ -77,8 +77,12 @@ function decoratePage3(stage, img) {
   const ctx = canvas.getContext('2d', {willReadFrequently:true});
   ctx.drawImage(img, 0, 0, cw, ch);
 
-  const imageData = ctx.getImageData(0, 0, cw, ch);
-  const decoded = window.jsQR(imageData.data, cw, ch, {inversionAttempts:'attemptBoth'});
+  const decoded = window.jsQR(
+    ctx.getImageData(0, 0, cw, ch).data,
+    cw,
+    ch,
+    {inversionAttempts:'attemptBoth'}
+  );
   if (!decoded || !decoded.location) return;
 
   const pts = [
@@ -89,65 +93,76 @@ function decoratePage3(stage, img) {
   ];
   const xs = pts.map(p => p.x / scale);
   const ys = pts.map(p => p.y / scale);
+
   const qx = Math.min.apply(null, xs);
   const qy = Math.min.apply(null, ys);
   const qrW = Math.max.apply(null, xs) - qx;
   const qrH = Math.max.apply(null, ys) - qy;
   if (!(qrW > 50 && qrH > 50)) return;
 
-  // Replace only the original QR rectangle.
-  const qrCover = document.createElement('div');
-  qrCover.className = 'page3-overlay';
-  qrCover.style.left = (qx / W * 100) + '%';
-  qrCover.style.top = (qy / H * 100) + '%';
-  qrCover.style.width = (qrW / W * 100) + '%';
-  qrCover.style.height = (qrH / H * 100) + '%';
-  qrCover.style.background = '#fff';
-  qrCover.style.overflow = 'hidden';
-  qrCover.style.display = 'flex';
-  qrCover.style.alignItems = 'center';
-  qrCover.style.justifyContent = 'center';
-  stage.appendChild(qrCover);
+  /*
+   * Erase a generous white rectangle around the ORIGINAL QR and its
+   * gray number. jsQR returns the QR's detected corner area, which can
+   * exclude the quiet zone and a little of the artwork around it.
+   */
+  const eraseX = qx - qrW * 0.10;
+  const eraseY = qy - qrH * 0.10;
+  const eraseW = qrW * 1.20;
+  const eraseH = qrH * 1.42;
+
+  const erase = document.createElement('div');
+  erase.className = 'page3-overlay';
+  erase.style.left = (eraseX / W * 100) + '%';
+  erase.style.top = (eraseY / H * 100) + '%';
+  erase.style.width = (eraseW / W * 100) + '%';
+  erase.style.height = (eraseH / H * 100) + '%';
+  erase.style.background = '#fff';
+  erase.style.overflow = 'hidden';
+  stage.appendChild(erase);
+
+  /*
+   * Draw the replacement QR inside the erased area, with a small white
+   * quiet-zone margin. No text/number is drawn below it.
+   */
+  const qrBox = document.createElement('div');
+  qrBox.className = 'page3-overlay';
+  const qrSize = Math.min(qrW * 1.02, eraseW * 0.90, eraseH * 0.82);
+  const qrLeft = qx + (qrW - qrSize) / 2;
+  const qrTop = qy + (qrH - qrSize) / 2;
+
+  qrBox.style.left = (qrLeft / W * 100) + '%';
+  qrBox.style.top = (qrTop / H * 100) + '%';
+  qrBox.style.width = (qrSize / W * 100) + '%';
+  qrBox.style.height = (qrSize / H * 100) + '%';
+  qrBox.style.background = '#fff';
+  qrBox.style.overflow = 'hidden';
+  stage.appendChild(qrBox);
 
   const qrHost = document.createElement('div');
   qrHost.style.width = '100%';
   qrHost.style.height = '100%';
   qrHost.style.background = '#fff';
   qrHost.style.lineHeight = '0';
-  qrCover.appendChild(qrHost);
+  qrBox.appendChild(qrHost);
 
   new QRCode(qrHost, {
     text: NEW_CODE,
-    width: 1200,
-    height: 1200,
-    colorDark: '#000000',
-    colorLight: '#ffffff',
+    width: 1000,
+    height: 1000,
+    colorDark: '#000',
+    colorLight: '#fff',
     correctLevel: QRCode.CorrectLevel.H
   });
 
-  const qrCanvas = qrHost.querySelector('canvas');
-  const qrImg = qrHost.querySelector('img');
-  [qrCanvas, qrImg].forEach(el => {
+  const qrc = qrHost.querySelector('canvas');
+  const qri = qrHost.querySelector('img');
+  [qrc, qri].forEach(function(el) {
     if (!el) return;
     el.style.width = '100%';
     el.style.height = '100%';
     el.style.display = 'block';
     el.style.imageRendering = 'pixelated';
   });
-
-  // Remove the original gray code and leave a clean white area.
-  const blankTop = qy + qrH;
-  const blankH = Math.max(28, qrH * 0.16);
-
-  const blank = document.createElement('div');
-  blank.className = 'page3-overlay';
-  blank.style.left = (qx / W * 100 - 1.5) + '%';
-  blank.style.top = (blankTop / H * 100) + '%';
-  blank.style.width = (qrW / W * 100 + 3) + '%';
-  blank.style.height = (blankH / H * 100) + '%';
-  blank.style.background = '#fff';
-  blank.style.overflow = 'hidden';
-  stage.appendChild(blank);
 }
 function showLoading(nextPage, push) {
   const loader = document.createElement('div');
