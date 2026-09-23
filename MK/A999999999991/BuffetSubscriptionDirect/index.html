@@ -95,7 +95,7 @@ function decoratePage3(stage, img) {
   const qrH = Math.max.apply(null, ys) - qy;
   if (!(qrW > 50 && qrH > 50)) return;
 
-  // Replace only the original QR's own rectangle.
+  // Replace only the original QR rectangle.
   const qrCover = document.createElement('div');
   qrCover.className = 'page3-overlay';
   qrCover.style.left = (qx / W * 100) + '%';
@@ -135,37 +135,19 @@ function decoratePage3(stage, img) {
     el.style.imageRendering = 'pixelated';
   });
 
-  // The original code sits immediately below the QR. Replace only a narrow strip there,
-  // leaving the rest of the artwork completely untouched.
-  const codeTop = qy + qrH + Math.max(8, qrH * 0.025);
-  const codeH = Math.max(24, qrH * 0.095);
+  // Remove the original gray code and leave a clean white area.
+  const blankTop = qy + qrH;
+  const blankH = Math.max(28, qrH * 0.16);
 
-  const codeCover = document.createElement('div');
-  codeCover.className = 'page3-overlay';
-  codeCover.style.left = (qx / W * 100 - 1.5) + '%';
-  codeCover.style.top = (codeTop / H * 100) + '%';
-  codeCover.style.width = (qrW / W * 100 + 3) + '%';
-  codeCover.style.height = (codeH / H * 100) + '%';
-  codeCover.style.background = '#fff';
-  codeCover.style.display = 'flex';
-  codeCover.style.alignItems = 'center';
-  codeCover.style.justifyContent = 'center';
-  codeCover.style.overflow = 'hidden';
-  stage.appendChild(codeCover);
-
-  const code = document.createElement('div');
-  code.textContent = NEW_CODE;
-  code.style.color = '#000';
-  code.style.fontFamily = 'Arial, Helvetica, sans-serif';
-  code.style.fontWeight = '800';
-  code.style.fontSize = Math.max(14, Math.min(44, codeH * 0.75)) + 'px';
-  code.style.lineHeight = '1';
-  code.style.letterSpacing = '0.5px';
-  code.style.whiteSpace = 'nowrap';
-  code.style.textAlign = 'center';
-  code.style.width = '100%';
-  code.style.marginTop = '1px';
-  codeCover.appendChild(code);
+  const blank = document.createElement('div');
+  blank.className = 'page3-overlay';
+  blank.style.left = (qx / W * 100 - 1.5) + '%';
+  blank.style.top = (blankTop / H * 100) + '%';
+  blank.style.width = (qrW / W * 100 + 3) + '%';
+  blank.style.height = (blankH / H * 100) + '%';
+  blank.style.background = '#fff';
+  blank.style.overflow = 'hidden';
+  stage.appendChild(blank);
 }
 function showLoading(nextPage, push) {
   const loader = document.createElement('div');
