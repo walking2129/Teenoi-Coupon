@@ -47,121 +47,95 @@ const page3Promise = fetch('page3.html?clean=1').then(function(r){
 });
 
 function makePage3(src, done){
-  const img = new Image();
+  const img=new Image();
 
-  img.onload = function(){
-    try {
-      const W = img.naturalWidth;
-      const H = img.naturalHeight;
-      if (!W || !H) return done(img);
+  img.onload=function(){
+    try{
+      const W=img.naturalWidth, H=img.naturalHeight;
+      if(!W||!H) return done(img);
 
-      // Try several resolutions. The original QR can be too small for a single pass.
-      const attempts = [
-        [W,H],
-        [Math.round(W*0.85),Math.round(H*0.85)],
-        [Math.round(W*0.65),Math.round(H*0.65)],
-        [Math.round(W*0.45),Math.round(H*0.45)]
-      ];
+      let found=null;
+      const factors=[1,0.85,0.65,0.45];
 
-      let found = null;
-
-      for (let i=0; i<attempts.length && !found; i++) {
-        const cw = Math.max(1, attempts[i][0]);
-        const ch = Math.max(1, attempts[i][1]);
-        const c = document.createElement('canvas');
-        c.width = cw; c.height = ch;
-        const x = c.getContext('2d', {willReadFrequently:true});
+      for(let i=0;i<factors.length && !found;i++){
+        const f=factors[i];
+        const cw=Math.max(1,Math.round(W*f));
+        const ch=Math.max(1,Math.round(H*f));
+        const c=document.createElement('canvas');
+        c.width=cw; c.height=ch;
+        const x=c.getContext('2d',{willReadFrequently:true});
         x.drawImage(img,0,0,cw,ch);
-        const d = window.jsQR(
+        const d=window.jsQR(
           x.getImageData(0,0,cw,ch).data,
-          cw,ch,
-          {inversionAttempts:'attemptBoth'}
+          cw,ch,{inversionAttempts:'attemptBoth'}
         );
-        if (d && d.location) {
-          found = {d:d, scaleX:cw/W, scaleY:ch/H};
-        }
+        if(d&&d.location) found={d:d,scale:f};
       }
 
-      if (!found) {
-        // Never silently leave the old QR/code in place.
-        return done(img);
-      }
+      if(!found) return done(img);
 
-      const loc = found.d.location;
-      const px = [
-        loc.topLeftCorner,
-        loc.topRightCorner,
-        loc.bottomRightCorner,
-        loc.bottomLeftCorner
+      const L=found.d.location;
+      const pts=[
+        L.topLeftCorner,L.topRightCorner,
+        L.bottomRightCorner,L.bottomLeftCorner
       ];
-      const xs = px.map(p=>p.x/found.scaleX);
-      const ys = px.map(p=>p.y/found.scaleY);
-
+      const xs=pts.map(p=>p.x/found.scale);
+      const ys=pts.map(p=>p.y/found.scale);
       const qx=Math.min.apply(null,xs);
       const qy=Math.min.apply(null,ys);
       const qw=Math.max.apply(null,xs)-qx;
       const qh=Math.max.apply(null,ys)-qy;
-      if (!(qw>40 && qh>40)) return done(img);
+      if(!(qw>40&&qh>40)) return done(img);
 
       const base=document.createElement('canvas');
       base.width=W; base.height=H;
       const bctx=base.getContext('2d');
       bctx.drawImage(img,0,0);
 
-      // Clear the original QR, quiet zone, and the gray number below it.
-      const left=qx-qw*0.12;
-      const top=qy-qh*0.12;
-      const width=qw*1.24;
-      const height=qh*1.48;
+      /*
+       * IMPORTANT:
+       * Only erase the QR rectangle itself and the gray number strip directly
+       * beneath it. No extra margin is used, so surrounding red artwork remains.
+       */
       bctx.fillStyle='#fff';
-      bctx.fillRect(left,top,width,height);
+      bctx.fillRect(qx,qy,qw,qh);
 
-      // Generate the replacement QR off-screen.
+      const codeStripH=Math.max(18,Math.round(qh*0.13));
+      bctx.fillRect(qx,qy+qh,qw,codeStripH);
+
       const host=document.createElement('div');
       host.style.position='fixed';
-      host.style.left='-2000px';
-      host.style.top='-2000px';
-      host.style.width='1600px';
-      host.style.height='1600px';
+      host.style.left='-3000px';
+      host.style.top='-3000px';
+      host.style.width='1200px';
+      host.style.height='1200px';
       host.style.background='#fff';
       document.body.appendChild(host);
 
       new QRCode(host,{
         text:NEW_CODE,
-        width:1600,
-        height:1600,
+        width:1200,
+        height:1200,
         colorDark:'#000',
         colorLight:'#fff',
         correctLevel:QRCode.CorrectLevel.H
       });
 
-      const qCanvas=host.querySelector('canvas');
-      const qImage=host.querySelector('img');
-
-      const drawQR=function(source){
-        if (!source) {
-          host.remove();
-          return done(base);
-        }
-        const size=Math.min(qw*1.02,width*0.90);
-        const dx=qx+(qw-size)/2;
-        const dy=qy+(qh-size)/2;
-        bctx.drawImage(source,dx,dy,size,size);
+      const source=host.querySelector('canvas')||host.querySelector('img');
+      if(!source){
         host.remove();
-        done(base);
-      };
-
-      if (qCanvas) {
-        drawQR(qCanvas);
-      } else if (qImage) {
-        if (qImage.complete) drawQR(qImage);
-        else qImage.onload=function(){drawQR(qImage);};
-      } else {
-        host.remove();
-        done(base);
+        return done(base);
       }
 
-    } catch(e) {
+      const size=Math.min(qw,qh)*0.98;
+      const dx=qx+(qw-size)/2;
+      const dy=qy+(qh-size)/2;
+      bctx.drawImage(source,dx,dy,size,size);
+
+      host.remove();
+      done(base);
+
+    }catch(e){
       done(img);
     }
   };
