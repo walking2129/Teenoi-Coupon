@@ -24,6 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build clean Page 3
+        run: |
+          python -m pip install --quiet pillow opencv-python-headless qrcode
+          python tools/build_clean_page3.py
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
