@@ -9,7 +9,9 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html{margin:0;background:#f5f5f5;scroll-behavior:smooth}
   body{margin:0;background:#f5f5f5;color:#222;font-family:Arial,"Noto Sans Thai",Tahoma,sans-serif}
-  .page{width:100%;max-width:720px;margin:0 auto;background:#fff;min-height:100vh;box-shadow:0 0 18px rgba(0,0,0,.06);transition:filter .22s ease}\n   .page.used-state{filter:grayscale(1)}
+  .page{width:100%;max-width:720px;margin:0 auto;background:#fff;min-height:100vh;box-shadow:0 0 18px rgba(0,0,0,.06);transition:filter .22s ease}
+   .page.used-state{filter:grayscale(1) !important;}
+   .page.used-state *{filter:grayscale(1) !important;}
   .banner{display:block;width:100%;height:auto;aspect-ratio:3/1;object-fit:cover}
   .coupon{padding:20px 18px 28px;text-align:center;background:#fff}
   .qr{display:block;width:min(63vw,270px);height:auto;margin:0 auto 8px;image-rendering:auto}
