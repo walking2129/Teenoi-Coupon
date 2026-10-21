@@ -9,7 +9,7 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html{margin:0;background:#f5f5f5;scroll-behavior:smooth}
   body{margin:0;background:#f5f5f5;color:#222;font-family:Arial,"Noto Sans Thai",Tahoma,sans-serif}
-  .page{width:100%;max-width:720px;margin:0 auto;background:#fff;min-height:100vh;box-shadow:0 0 18px rgba(0,0,0,.06)}
+  .page{width:100%;max-width:720px;margin:0 auto;background:#fff;min-height:100vh;box-shadow:0 0 18px rgba(0,0,0,.06);transition:filter .22s ease}\n   .page.used-state{filter:grayscale(1)}
   .banner{display:block;width:100%;height:auto;aspect-ratio:3/1;object-fit:cover}
   .coupon{padding:20px 18px 28px;text-align:center;background:#fff}
   .qr{display:block;width:min(63vw,270px);height:auto;margin:0 auto 8px;image-rendering:auto}
@@ -70,6 +70,8 @@
   const EXPIRY_KEY = 'teenoi_mlu8963_lotus_v1_expiry';
   const USED_KEY = 'teenoi_mlu8963_lotus_v1_used';
   const timer = document.getElementById('timer');
+  const page = document.querySelector('.page');
+  const hint = document.querySelector('.hint');
   const control = document.getElementById('usedControl');
   const label = document.getElementById('usedLabel');
   const thumb = document.getElementById('thumb');
@@ -91,14 +93,18 @@
   function offsetMax(){ return Math.max(0, control.clientWidth - thumb.clientWidth - 14); }
   function setOffset(px){ control.style.setProperty('--swipe-x', `${Math.max(0,Math.min(offsetMax(),px))}px`); }
   function setUsedVisual(){
-    used = true; write(USED_KEY,'1'); label.textContent='USED'; control.classList.add('used-complete');
-    control.setAttribute('aria-label','รูดไปทางขวาเพื่อเปิดใช้งานคูปองอีกครั้ง'); setOffset(offsetMax()); tick();
+    used = true; write(USED_KEY,'1'); page.classList.add('used-state'); label.textContent='USED'; control.classList.add('used-complete');
+    control.setAttribute('aria-label','รูดไปทางซ้ายเพื่อเปิดใช้งานคูปองอีกครั้ง');
+    hint.textContent='ใช้แล้ว: รูดปุ่มไปทางซ้ายเพื่อคืนสีและเริ่มนับเวลา 2 ชั่วโมงใหม่';
+    setOffset(offsetMax()); tick();
     if(interval){ clearInterval(interval); interval=null; }
   }
   function resetActive(){
     used=false; remove(USED_KEY); expiry=Date.now()+DURATION_MS; write(EXPIRY_KEY,String(expiry));
-    label.textContent='PRESS USED'; control.classList.remove('used-complete');
-    control.setAttribute('aria-label','รูดไปทางขวาเพื่อใช้คูปอง'); setOffset(0); tick();
+    page.classList.remove('used-state'); label.textContent='PRESS USED'; control.classList.remove('used-complete');
+    control.setAttribute('aria-label','รูดไปทางขวาเพื่อใช้คูปอง');
+    hint.textContent='รูดปุ่มไปทางขวาเมื่อใช้สิทธิ์แล้ว';
+    setOffset(0); tick();
     if(interval) clearInterval(interval); interval=setInterval(tick,1000);
   }
   const storedExpiry = Number(read(EXPIRY_KEY));
@@ -117,7 +123,7 @@
   function finishSwipe(e){
     if(pointerStart===null || (e && activePointer!==null && e.pointerId!==activePointer)) return;
     const travelled=(parseFloat(getComputedStyle(control).getPropertyValue('--swipe-x'))||0);
-    const done=travelled>=offsetMax()*0.68; pointerStart=null; activePointer=null;
+    const done = used ? travelled <= offsetMax()*0.32 : travelled >= offsetMax()*0.68; pointerStart=null; activePointer=null;
     if(done){ if(used) resetActive(); else setUsedVisual(); }
     else setOffset(used?offsetMax():0);
   }
