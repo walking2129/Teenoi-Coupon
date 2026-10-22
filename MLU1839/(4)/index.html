@@ -199,9 +199,18 @@
   arrow.addEventListener('pointerup',finishEntryDrag);
   arrow.addEventListener('pointercancel',finishEntryDrag);
 
-  const storedExpiry = Number(read(EXPIRY_KEY));
-  expiry = storedExpiry > 0 ? storedExpiry : 0;
-  if(read(USED_KEY)==='1') setUsedVisual();
+  // A fresh page open starts a new two-hour coupon session.
+  // Do not restore an earlier countdown or USED state from localStorage.
+  remove(EXPIRY_KEY);
+  remove(USED_KEY);
+  expiry = 0;
+  used = false;
+  page.classList.remove('used-state');
+  label.textContent = 'PRESS USED';
+  control.classList.remove('used-complete');
+  control.setAttribute('aria-label','รูดปุ่มไปทางขวาเพื่อใช้คูปอง');
+  hint.textContent = 'รูดปุ่มไปทางขวาเมื่อใช้สิทธิ์แล้ว';
+  setOffset(0);
 
   control.addEventListener('pointerdown',e=>{
     if(e.button!==undefined && e.button!==0) return;
