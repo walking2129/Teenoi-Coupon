@@ -199,9 +199,32 @@
   arrow.addEventListener('pointerup',finishEntryDrag);
   arrow.addEventListener('pointercancel',finishEntryDrag);
 
-  const storedExpiry = Number(read(EXPIRY_KEY));
-  expiry = storedExpiry > 0 ? storedExpiry : 0;
-  if(read(USED_KEY)==='1') setUsedVisual();
+  function resetFreshOpenState(){
+    if(interval){ clearInterval(interval); interval=null; }
+    remove(EXPIRY_KEY);
+    remove(USED_KEY);
+    expiry=0; used=false;
+    pointerStart=null; startOffset=0; activePointer=null;
+    entryDragging=false; entryOpened=false; entryStartX=0; entryStartLeft=0;
+    page.classList.remove('used-state');
+    label.textContent='PRESS USED';
+    control.classList.remove('used-complete','dragging');
+    control.style.removeProperty('color');
+    control.style.background='#e51d2a';
+    control.style.removeProperty('--swipe-progress');
+    control.style.setProperty('--swipe-x','7px');
+    control.setAttribute('aria-label','รูดไปทางขวาเพื่อใช้คูปอง');
+    hint.textContent='รูดปุ่มไปทางขวาเมื่อใช้สิทธิ์แล้ว';
+    setOffset(0);
+    timer.textContent='02:00:00';
+    page1.classList.remove('hidden');
+    page2.classList.add('hidden');
+    arrow.classList.remove('dragging');
+    arrow.style.left='12.1vw';
+  }
+  // A new page open, including a back-forward-cache restore, starts a fresh session.
+  window.addEventListener('pageshow', resetFreshOpenState);
+  resetFreshOpenState();
 
   control.addEventListener('pointerdown',e=>{
     if(e.button!==undefined && e.button!==0) return;

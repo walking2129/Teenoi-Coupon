@@ -244,9 +244,6 @@ The current QR payload is MK780944. Replace the payload and QR image together fo
   let timerStarted = false;
   let timerInterval = null;
 
-  function storageGet() {
-    try { return localStorage.getItem(COUPON_KEY); } catch (_) { return null; }
-  }
   function storageSet(value) {
     try { localStorage.setItem(COUPON_KEY, value); } catch (_) {}
   }
@@ -267,13 +264,6 @@ The current QR payload is MK780944. Replace the payload and QR image together fo
     page2wrap.classList.add('used-state');
     // After PRESS USED the timer is shown in dotted time format.
     timer.textContent = '00.00.00';
-  }
-
-  function restoreUsedStateIfActive() {
-    const raw = storageGet();
-    if (!raw) return false;
-    setUsedVisual();
-    return true;
   }
 
   function markUsed() {
@@ -338,8 +328,9 @@ The current QR payload is MK780944. Replace the payload and QR image together fo
     page1.classList.add('hidden');
     page2.classList.remove('hidden');
 
-    // Restore a recently used state before starting the normal timer.
-    if (!restoreUsedStateIfActive()) startTimer();
+    // Every fresh coupon opening starts a new two-hour countdown.
+    storageRemove();
+    startTimer();
   }
 
   // Interaction starts ONLY when the user touches the arrow.
@@ -434,6 +425,40 @@ The current QR payload is MK780944. Replace the payload and QR image together fo
   usedButton.addEventListener('pointerup', finishUsedSwipe);
   usedButton.addEventListener('pointercancel', finishUsedSwipe);
 
+
+  function resetFreshOpenState() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+    storageRemove();
+    dragging = false;
+    opened = false;
+    used = false;
+    usedSwipeDragging = false;
+    startX = 0;
+    startLeftPx = 0;
+    usedSwipeStartX = 0;
+    remaining = COUPON_DURATION_SEC;
+    timerStarted = false;
+    page2wrap.classList.remove('used-state');
+    usedButton.textContent = 'PRESS USED';
+    usedButton.disabled = false;
+    usedButton.setAttribute('aria-label', 'Swipe right to use coupon');
+    usedButton.setAttribute('title', 'Swipe right to use coupon');
+    usedButton.classList.remove('used-complete', 'dragging');
+    usedButton.style.removeProperty('color');
+    usedButton.style.background = '#e31922';
+    usedButton.style.removeProperty('--swipe-progress');
+    usedButton.style.setProperty('--swipe-x', '7px');
+    timer.textContent = '02:00:00';
+    page1.classList.remove('hidden');
+    page2.classList.add('hidden');
+    arrow.classList.remove('dragging');
+    arrow.style.left = '12.1vw';
+  }
+
+  // Treat every fresh open or browser restoration as a new two-hour session.
+  resetFreshOpenState();
+  window.addEventListener('pageshow', resetFreshOpenState);
 
   // Absolutely no swipe handlers on the page itself.
 })();
