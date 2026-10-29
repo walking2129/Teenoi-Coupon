@@ -19,15 +19,11 @@
   parsed.title='e-Coupon Teenoi 100 bath — '+code;
   const codeEl=parsed.getElementById('code');if(codeEl)codeEl.textContent=code;
   const qr=parsed.getElementById('qr');
-  if(qr){qr.alt='QR Code '+code;qr.removeAttribute('src');}
-  const oldScripts=[...parsed.querySelectorAll('script')];
-  if(oldScripts.length){
-   const qrLib=parsed.createElement('script');qrLib.src='https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js';oldScripts[0].before(qrLib);
-   const qrScript=parsed.createElement('script');
-   qrScript.textContent='(function(){const c='+JSON.stringify(code)+';function draw(){const q=document.getElementById("qr");if(!q)return;if(window.QRCode&&QRCode.toDataURL){QRCode.toDataURL(c,{width:145,margin:0,errorCorrectionLevel:"M"}).then(u=>{q.src=u}).catch(()=>{q.alt="QR สร้างไม่สำเร็จ";q.style.opacity=".15"})}else{q.alt="QR library unavailable";q.style.opacity=".15"}}if(document.readyState==="complete")draw();else window.addEventListener("load",draw,{once:true});})();';
-   oldScripts[0].before(qrScript);
+  if(qr){
+   qr.alt='QR Code '+code;
+   qr.src='https://api.qrserver.com/v1/create-qr-code/?size=145x145&margin=0&data='+encodeURIComponent(code);
   }
-  document.open();document.write('<!doctype html>\n'+parsed.documentElement.outerHTML);document.close();
+    document.open();document.write('<!doctype html>\n'+parsed.documentElement.outerHTML);document.close();
  }catch(e){msg.textContent='เปิดแม่แบบคูปองไม่สำเร็จ กรุณาลองอีกครั้ง หรือตรวจสอบอินเทอร์เน็ต';document.querySelector('h2').textContent='เปิดคูปองไม่สำเร็จ'}
 })();
 </script></body></html>
