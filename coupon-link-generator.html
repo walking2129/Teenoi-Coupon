@@ -35,12 +35,12 @@ button{border:0;border-radius:10px;padding:12px 15px;font-size:15px;font-weight:
 <button class="secondary" id="clear">ล้างช่องกรอก</button>
 </div>
 <div id="status" role="status" aria-live="polite"></div>
-<p class="note">ลิงก์ใช้รูปแบบ /รหัส/(3)/ เหมือนตัวอย่างเดิม ระบบจะตัดรหัสซ้ำในชุดเดียวกันออก และสร้าง QR พร้อมรหัสตามค่าที่ระบุเมื่อเปิดลิงก์</p>
+<p class="note">ระบบจะตรวจว่าหน้าคูปองมีไฟล์จริงหรือไม่ ถ้ามีจะใช้ลิงก์เดิม ถ้ายังไม่มีจะใช้หน้าแสดงผลอัตโนมัติที่เปิดได้และมีการ์ดพรีวิว ทั้งนี้หน้าแสดงผลอัตโนมัติไม่ได้ยืนยันว่ารหัสนั้นมีสิทธิ์ใช้งานจริงกับร้านตี๋น้อย</p>
 </section>
 <section class="results">
 <h2>ผลลัพธ์และรายการล่าสุดในเบราว์เซอร์นี้</h2>
 <div id="list" class="empty">ยังไม่มีรายการในหน้านี้</div>
-<p class="note">รายการล่าสุดในส่วนนี้บันทึกไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น ควรใช้ปุ่มส่งออก CSV เพื่อสำรองหรือย้ายรายการไปเครื่องอื่น ลิงก์คูปองที่สร้างแล้วเปิดได้จากอุปกรณ์อื่นเมื่อมีอินเทอร์เน็ต</p>
+<p class="note">รายการล่าสุดบันทึกไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น ควรส่งออก CSV เพื่อสำรอง รายการที่ไม่มีไฟล์คูปองจริงจะใช้หน้าแสดงผลอัตโนมัติและมีชื่อพรีวิวแบบทั่วไป</p>
 </section>
 </main>
 <script>
@@ -50,7 +50,19 @@ const STORE='teenoi-link-generator-history-v1';
 const input=document.getElementById('codes'), list=document.getElementById('list'), status=document.getElementById('status');
 let rows=[];
 try{const saved=JSON.parse(localStorage.getItem(STORE)||'[]');if(Array.isArray(saved))rows=saved.filter(x=>x&&x.code&&x.url)}catch(e){}
-function link(code){return BASE+encodeURIComponent(code)+'/%283%29/';}
+async function pageExists(code){
+ const path='contents/'+encodeURIComponent(code)+'/%283%29/index.html?ref=main';
+ const res=await fetch('https://api.github.com/repos/walking2129/Teenoi-Coupon/'+path,{headers:{'Accept':'application/vnd.github+json'}});
+ if(res.status===404)return false;
+ if(res.status===403)throw new Error('GitHub จำกัดการตรวจสอบชั่วคราว กรุณาลองใหม่ภายหลัง');
+ if(!res.ok)throw new Error('ตรวจสอบไฟล์คูปองไม่สำเร็จ ('+res.status+')');
+ const data=await res.json();return data&&data.type==='file';
+}
+function link(code,hasPage){
+ return hasPage
+  ? BASE+encodeURIComponent(code)+'/%283%29/'
+  : BASE+'coupon-preview.html?code='+encodeURIComponent(code);
+}
 function safeCode(s){return /^[A-Za-z0-9_-]{4,32}$/.test(s);}
 function render(){
  list.textContent='';
@@ -62,21 +74,35 @@ function render(){
   const c=document.createElement('div');c.className='code';c.textContent=r.code;
   const u=document.createElement('div');u.className='url';u.textContent=r.url;
   left.append(c,u);
+  const note=document.createElement('div');note.className='url';
+  note.textContent=r.dynamic?'หน้าแสดงผลอัตโนมัติ — พรีวิวแบบทั่วไป ไม่ได้ยืนยันสิทธิ์คูปอง':'พบไฟล์หน้าคูปองจริง';
+  left.append(note);
   const b=document.createElement('button');b.className='secondary small';b.textContent='คัดลอก';
   b.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(r.url);status.textContent='คัดลอกลิงก์ '+r.code+' แล้ว'}catch(e){status.textContent='คัดลอกไม่สำเร็จ กรุณากดค้างที่ลิงก์เพื่อคัดลอก'}});
   wrap.append(left,b);list.append(wrap);
  });
 }
 function save(){try{localStorage.setItem(STORE,JSON.stringify(rows))}catch(e){status.textContent='พื้นที่บันทึกในเบราว์เซอร์เต็ม กรุณาส่งออก CSV สำรองข้อมูล'}}
-document.getElementById('make').addEventListener('click',()=>{
- const raw=input.value.toUpperCase().split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean);
+document.getElementById('make').addEventListener('click',async()=>{
+ const raw=input.value.toUpperCase().split(/[\\s,;]+/).map(s=>s.trim()).filter(Boolean);
  const unique=[...new Set(raw)];const bad=unique.filter(x=>!safeCode(x));
  if(!unique.length){status.textContent='กรอกรหัสอย่างน้อย 1 รหัสก่อนครับ';return}
  if(bad.length){status.textContent='รูปแบบรหัสไม่ถูกต้อง: '+bad.slice(0,8).join(', ');return}
- const add=unique.map(code=>({code,url:link(code),createdAt:new Date().toISOString()}));
- const map=new Map(rows.map(r=>[r.code,r]));add.forEach(r=>map.set(r.code,r));
- rows=[...map.values()];save();render();
- status.textContent='สร้างลิงก์แล้ว '+add.length+' รหัส (ไม่รวมรหัสซ้ำในชุดกรอก)';
+ const add=[];
+ const button=document.getElementById('make');button.disabled=true;
+ try{
+  let existing=0,fallback=0;
+  for(let i=0;i<unique.length;i++){
+   status.textContent='กำลังตรวจไฟล์ '+(i+1)+'/'+unique.length+' — '+unique[i];
+   const hasPage=await pageExists(unique[i]);
+   add.push({code:unique[i],url:link(unique[i],hasPage),dynamic:!hasPage,createdAt:new Date().toISOString()});
+   if(hasPage)existing++;else fallback++;
+  }
+  const map=new Map(rows.map(r=>[r.code,r]));add.forEach(r=>map.set(r.code,r));
+  rows=[...map.values()];save();render();
+  status.textContent='เสร็จแล้ว '+add.length+' รหัส: มีหน้าเว็บจริง '+existing+' · ใช้หน้าแสดงผลอัตโนมัติ '+fallback;
+ }catch(e){status.textContent=e.message||'ตรวจสอบไม่สำเร็จ กรุณาลองใหม่'}
+ finally{button.disabled=false}
 });
 document.getElementById('copyAll').addEventListener('click',async()=>{
  if(!rows.length){status.textContent='ยังไม่มีลิงก์ให้คัดลอก';return}
