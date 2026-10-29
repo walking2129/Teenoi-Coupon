@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 
 SITE_BASE = "https://walking2129.github.io/Teenoi-Coupon"
+PREVIEW_TITLE = "e-Coupon Teenoi 100 bath"
 CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{4,32}$")
 VARIANT_PATTERN = re.compile(r"^\((\d+)\)$")
 TITLE_PATTERN = re.compile(r"<title\b[^>]*>(.*?)</title\s*>", re.IGNORECASE | re.DOTALL)
@@ -58,21 +59,13 @@ for code_dir in Path(".").iterdir():
             continue
 
         html = page.read_text(encoding="utf-8")
-        title_match = TITLE_PATTERN.search(html)
-        title = plain_title(title_match.group(1)) if title_match else ""
-        if not title:
-            title = "Teenoi Coupon — " + code_dir.name
-
         variant_number = variant_match.group(1)
         canonical_url = (
             SITE_BASE + "/" + code_dir.name +
             "/%28" + variant_number + "%29/"
         )
-        description = (
-            "คูปองตี๋น้อย 100 บาท — " + code_dir.name
-            if re.search(r"[\u0E00-\u0E7F]", title)
-            else "e-Coupon Teenoi 100 bath — " + code_dir.name
-        )
+        # Keep the card title and description identical for every coupon URL.
+        description = PREVIEW_TITLE
 
         head_match = HEAD_PATTERN.search(html)
         if not head_match:
@@ -85,7 +78,7 @@ for code_dir in Path(".").iterdir():
         # Clean existing OG/Twitter/description tags first, then insert canonical values.
         head = META_PATTERN.sub("", head)
         head = replace_or_insert_meta(head, "property", "og:type", "website")
-        head = replace_or_insert_meta(head, "property", "og:title", title)
+        head = replace_or_insert_meta(head, "property", "og:title", PREVIEW_TITLE)
         head = replace_or_insert_meta(head, "property", "og:description", description)
         head = replace_or_insert_meta(head, "property", "og:site_name", "Teenoi Coupon")
         head = replace_or_insert_meta(head, "property", "og:url", canonical_url)
