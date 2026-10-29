@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><meta name="theme-color" content="#ffffff"><title>เครื่องมือสร้าง QR บนแม่แบบ</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Noto Sans Thai",Tahoma,sans-serif;color:#17202a;color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#f4f6f8}.wrap{max-width:780px;margin:auto;padding:14px}.panel{background:#fff;border:1px solid #dce2e8;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 8px #0b182008}h1{font-size:22px;margin:0 0 6px}p{line-height:1.5;margin:6px 0 12px}.note{font-size:13px;color:#5a6672;background:#f6f8fa;padding:10px;border-radius:10px}label{display:block;font-weight:650;margin:12px 0 6px}input{font:inherit;width:100%;padding:12px;border:1px solid #cbd3dc;border-radius:10px;background:#fff}input[type=file]{font-size:14px}.btn{font:inherit;font-weight:700;border:0;border-radius:10px;padding:12px;cursor:pointer;width:100%;margin-top:10px}.primary{background:#174b70;color:#fff}.secondary{background:#e6edf2;color:#17384d}.preview{width:100%;height:auto;display:block;border:1px solid #dfe4e8;border-radius:10px;background:#fff}.status{font-size:13px;color:#576574;margin-top:8px}.small{font-size:12px;color:#536171}.hidden{position:fixed;left:-20000px;top:-20000px;visibility:hidden}
+</style></head><body><main class="wrap">
+<section class="panel"><h1>เครื่องมือสร้าง QR บนแม่แบบ</h1><p>กรอกเลขกำกับและข้อมูล QR จากนั้นสร้างภาพและดาวน์โหลด PNG ได้เลย</p>
+<div id="templateArea"><label for="templateFile">ภาพแม่แบบ (อัปโหลดครั้งแรกครั้งเดียว)</label><input id="templateFile" type="file" accept="image/png,image/jpeg,image/webp"><p class="small">ดาวน์โหลดภาพแม่แบบที่ให้มา แล้วเลือกไฟล์นี้ครั้งแรก ระบบจะจำภาพไว้ในเบราว์เซอร์เครื่องนี้</p></div>
+<div id="templateActions" hidden><p class="small">บันทึกภาพแม่แบบไว้ในเบราว์เซอร์นี้แล้ว</p><button id="changeTemplate" class="btn secondary" type="button">เปลี่ยนภาพแม่แบบ</button><input id="replacementFile" type="file" accept="image/png,image/jpeg,image/webp" hidden></div>
+<label for="displayCode">เลขที่แสดงใต้ QR</label><input id="displayCode" autocomplete="off" inputmode="numeric" placeholder="พิมพ์เลขกำกับ">
+<label for="qrData">ข้อมูลใน QR</label><input id="qrData" autocomplete="off" placeholder="ใส่ข้อมูลจากผู้ออกคูปอง">
+<p class="note">QR จะเก็บเฉพาะข้อมูลที่กรอก ควรใช้ข้อมูล QR ที่ได้รับจากผู้ออกคูปอง ระบบนี้ไม่ตรวจสอบสิทธิ์แลกรับ</p>
+<button class="btn primary" id="makeBtn" type="button">สร้างภาพ</button><button class="btn secondary" id="saveBtn" type="button" disabled>ดาวน์โหลดภาพ PNG</button><div class="status" id="status">รอเลือกภาพแม่แบบ</div></section>
+<section class="panel"><h2 style="font-size:18px;margin:0 0 10px">ภาพที่สร้าง</h2><canvas id="preview" class="preview" width="709" height="1536" aria-label="ภาพแม่แบบพร้อม QR และเลขกำกับ"></canvas></section>
+<div id="qrstage" class="hidden"></div></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const KEY='coupon_qr_maker_v2_template';
+const canvas=document.getElementById('preview'),ctx=canvas.getContext('2d');
+const statusEl=document.getElementById('status'),saveBtn=document.getElementById('saveBtn'),qrstage=document.getElementById('qrstage');
+const templateArea=document.getElementById('templateArea'),templateActions=document.getElementById('templateActions');
+let bg=new Image(),ready=false;
+function templateReady(){templateArea.hidden=true;templateActions.hidden=false;statusEl.textContent='โหลดภาพแม่แบบแล้ว พร้อมสร้างภาพ';drawBase();}
+function drawBase(){if(!bg.complete||!bg.naturalWidth)return;ctx.clearRect(0,0,709,1536);ctx.drawImage(bg,0,0,709,1536);}
+function addLabel(code){ctx.save();ctx.fillStyle='#171717';ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.font='bold 64px Arial, sans-serif';ctx.fillText(code,354.5,976,650);ctx.restore();}
+function setTemplate(data){return new Promise((resolve,reject)=>{const test=new Image();test.onload=()=>{try{localStorage.setItem(KEY,data);bg=test;templateReady();resolve();}catch(e){reject(new Error('บันทึกแม่แบบไม่ได้ พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็ม'));}};test.onerror=()=>reject(new Error('เปิดภาพแม่แบบไม่ได้'));test.src=data;});}
+async function handleFile(file){if(!file)return;if(!file.type.startsWith('image/')){statusEl.textContent='กรุณาเลือกไฟล์ภาพ';return;}statusEl.textContent='กำลังโหลดแม่แบบ…';const reader=new FileReader();reader.onload=async()=>{try{await setTemplate(reader.result);ready=false;saveBtn.disabled=true;}catch(e){statusEl.textContent=e.message;}};reader.onerror=()=>statusEl.textContent='อ่านไฟล์ภาพไม่สำเร็จ';reader.readAsDataURL(file);}
+document.getElementById('templateFile').addEventListener('change',e=>handleFile(e.target.files[0]));
+document.getElementById('changeTemplate').addEventListener('click',()=>document.getElementById('replacementFile').click());
+document.getElementById('replacementFile').addEventListener('change',e=>handleFile(e.target.files[0]));
+const saved=localStorage.getItem(KEY);if(saved){bg.onload=templateReady;bg.onerror=()=>{localStorage.removeItem(KEY);statusEl.textContent='ภาพแม่แบบเดิมเปิดไม่ได้ กรุณาเลือกไฟล์ใหม่';};bg.src=saved;}
+async function make(){
+ const code=document.getElementById('displayCode').value.trim(),data=document.getElementById('qrData').value.trim();
+ if(!bg.complete||!bg.naturalWidth){statusEl.textContent='กรุณาอัปโหลดภาพแม่แบบก่อน';return}
+ if(!code){statusEl.textContent='กรุณากรอกเลขที่แสดงใต้ QR';return}
+ if(!data){statusEl.textContent='กรุณากรอกข้อมูลใน QR';return}
+ if(typeof QRCode==='undefined'){statusEl.textContent='โหลดตัวสร้าง QR ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';return}
+ statusEl.textContent='กำลังสร้างภาพ…';saveBtn.disabled=true;ready=false;qrstage.innerHTML='';
+ try{
+  new QRCode(qrstage,{text:data,width:410,height:410,colorDark:'#071820',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+  await new Promise(r=>setTimeout(r,100));
+  const qrc=qrstage.querySelector('canvas'),qri=qrstage.querySelector('img');let source=qrc;
+  if(!source&&qri){if(!qri.complete)await new Promise((resolve,reject)=>{qri.onload=resolve;qri.onerror=reject;});source=qri;}
+  if(!source)throw new Error('QR unavailable');
+  drawBase();ctx.fillStyle='#fff';ctx.fillRect(143,441,424,424);ctx.drawImage(source,150,448,410,410);addLabel(code);
+  ready=true;saveBtn.disabled=false;statusEl.textContent='สร้างภาพแล้ว สามารถดาวน์โหลด PNG ได้';
+ }catch(e){statusEl.textContent='สร้าง QR ไม่สำเร็จ กรุณาลองใหม่';}
+}
+document.getElementById('makeBtn').addEventListener('click',make);
+saveBtn.addEventListener('click',()=>{if(!ready)return;const a=document.createElement('a');a.download='coupon-qr.png';a.href=canvas.toDataURL('image/png');a.click();});
+</script></body></html>
