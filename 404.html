@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="th">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Teenoi Coupon</title><style>body{font-family:Arial,sans-serif;background:#f5f5f5;margin:0;padding:24px;color:#222}main{max-width:520px;margin:10vh auto;background:#fff;padding:22px;border-radius:16px;box-shadow:0 4px 22px #0001;text-align:center}a{color:#c81920}</style></head>
+<body><main><h2>กำลังเปิดคูปอง…</h2><p id="message">กำลังตรวจสอบรหัสและเตรียม QR Code</p><p><a href="/Teenoi-Coupon/coupon-link-generator.html">เปิดเครื่องมือสร้างลิงก์คูปอง</a></p></main>
+<script>
+(async function(){
+ const BASE='/Teenoi-Coupon/';
+ const path=decodeURIComponent(location.pathname);
+ const match=path.match(/^\/Teenoi-Coupon\/([^/]+)\/\(3\)\/?$/);
+ const msg=document.getElementById('message');
+ if(!match){msg.textContent='ไม่พบหน้าที่ต้องการ กรุณาตรวจสอบรหัสหรือลองสร้างลิงก์ใหม่';document.querySelector('h2').textContent='ไม่พบคูปอง';return}
+ const code=match[1];
+ if(!/^[A-Za-z0-9_-]{4,32}$/.test(code)){msg.textContent='รูปแบบรหัสไม่ถูกต้อง';return}
+ try{
+  const response=await fetch(BASE+'MK966934/(3)/index.html?dynamic_template=1');
+  if(!response.ok) throw new Error('template unavailable');
+  const html=await response.text();
+  const parsed=new DOMParser().parseFromString(html,'text/html');
+  parsed.title='e-Coupon Teenoi 100 bath — '+code;
+  const codeEl=parsed.getElementById('code');if(codeEl)codeEl.textContent=code;
+  const qr=parsed.getElementById('qr');
+  if(qr){qr.alt='QR Code '+code;qr.removeAttribute('src');}
+  const oldScripts=[...parsed.querySelectorAll('script')];
+  if(oldScripts.length){
+   const qrLib=parsed.createElement('script');qrLib.src='https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js';oldScripts[0].before(qrLib);
+   const qrScript=parsed.createElement('script');
+   qrScript.textContent='(function(){const c='+JSON.stringify(code)+';function draw(){const q=document.getElementById("qr");if(!q)return;if(window.QRCode&&QRCode.toDataURL){QRCode.toDataURL(c,{width:145,margin:0,errorCorrectionLevel:"M"}).then(u=>{q.src=u}).catch(()=>{q.alt="QR สร้างไม่สำเร็จ";q.style.opacity=".15"})}else{q.alt="QR library unavailable";q.style.opacity=".15"}}if(document.readyState==="complete")draw();else window.addEventListener("load",draw,{once:true});})();';
+   oldScripts[0].before(qrScript);
+  }
+  document.open();document.write('<!doctype html>\n'+parsed.documentElement.outerHTML);document.close();
+ }catch(e){msg.textContent='เปิดแม่แบบคูปองไม่สำเร็จ กรุณาลองอีกครั้ง หรือตรวจสอบอินเทอร์เน็ต';document.querySelector('h2').textContent='เปิดคูปองไม่สำเร็จ'}
+})();
+</script></body></html>
