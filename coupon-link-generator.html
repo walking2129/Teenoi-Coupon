@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#d71920">
+<title>เครื่องมือสร้างลิงก์คูปอง Teenoi</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f5f5;color:#222;font-family:Arial,"Noto Sans Thai",sans-serif;padding:16px}
+main{max-width:760px;margin:0 auto;background:#fff;border-radius:18px;box-shadow:0 5px 24px #0001;overflow:hidden}
+header{background:#d71920;color:white;padding:22px 20px}h1{font-size:23px;margin:0 0 7px}header p{margin:0;font-size:14px;opacity:.95}
+section{padding:18px 20px}label{display:block;font-weight:700;margin-bottom:8px}
+textarea{display:block;width:100%;min-height:170px;padding:13px;border:1px solid #ccc;border-radius:12px;font:16px/1.55 monospace;resize:vertical}
+button{border:0;border-radius:10px;padding:12px 15px;font-size:15px;font-weight:700;cursor:pointer}
+.primary{background:#d71920;color:white}.secondary{background:#eee;color:#222}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.note{font-size:13px;color:#666;line-height:1.55;margin:12px 0 0}
+#status{margin-top:12px;font-weight:700;color:#176b35}
+.results{border-top:1px solid #eee}h2{font-size:18px;margin:0 0 12px}
+.row{padding:13px 0;border-bottom:1px solid #eee;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.code{font-weight:800;overflow-wrap:anywhere}.url{font-size:12px;color:#555;overflow-wrap:anywhere;margin-top:4px}.small{font-size:12px;padding:9px 11px;white-space:nowrap}
+.empty{color:#777;font-size:14px}
+@media(max-width:450px){body{padding:8px}header{padding:18px 16px}section{padding:16px}.row{grid-template-columns:minmax(0,1fr) auto}h1{font-size:21px}}
+</style>
+</head>
+<body>
+<main>
+<header><h1>เครื่องมือสร้างลิงก์คูปองตี๋น้อย</h1><p>วางรหัสหลายรายการ แล้วสร้างลิงก์พร้อมคัดลอกหรือส่งออกได้ทันที</p></header>
+<section>
+<label for="codes">รหัสคูปอง (ใส่หนึ่งรหัสต่อบรรทัด หรือคั่นด้วยช่องว่าง/จุลภาค)</label>
+<textarea id="codes" placeholder="MK966934&#10;MLU2638&#10;MLU8963" autocapitalize="characters" spellcheck="false"></textarea>
+<div class="actions">
+<button class="primary" id="make">สร้างลิงก์</button>
+<button class="secondary" id="copyAll">คัดลอกลิงก์ทั้งหมด</button>
+<button class="secondary" id="export">ส่งออก CSV</button>
+<button class="secondary" id="clear">ล้างช่องกรอก</button>
+</div>
+<div id="status" role="status" aria-live="polite"></div>
+<p class="note">ลิงก์ใช้รูปแบบ /รหัส/(3)/ เหมือนตัวอย่างเดิม ระบบจะตัดรหัสซ้ำในชุดเดียวกันออก และสร้าง QR พร้อมรหัสตามค่าที่ระบุเมื่อเปิดลิงก์</p>
+</section>
+<section class="results">
+<h2>ผลลัพธ์และรายการล่าสุดในเบราว์เซอร์นี้</h2>
+<div id="list" class="empty">ยังไม่มีรายการในหน้านี้</div>
+<p class="note">รายการล่าสุดในส่วนนี้บันทึกไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น ควรใช้ปุ่มส่งออก CSV เพื่อสำรองหรือย้ายรายการไปเครื่องอื่น ลิงก์คูปองที่สร้างแล้วเปิดได้จากอุปกรณ์อื่นเมื่อมีอินเทอร์เน็ต</p>
+</section>
+</main>
+<script>
+(function(){
+const BASE='https://walking2129.github.io/Teenoi-Coupon/';
+const STORE='teenoi-link-generator-history-v1';
+const input=document.getElementById('codes'), list=document.getElementById('list'), status=document.getElementById('status');
+let rows=[];
+try{const saved=JSON.parse(localStorage.getItem(STORE)||'[]');if(Array.isArray(saved))rows=saved.filter(x=>x&&x.code&&x.url)}catch(e){}
+function link(code){return BASE+encodeURIComponent(code)+'/%283%29/';}
+function safeCode(s){return /^[A-Za-z0-9_-]{4,32}$/.test(s);}
+function render(){
+ list.textContent='';
+ if(!rows.length){list.className='empty';list.textContent='ยังไม่มีรายการในหน้านี้';return}
+ list.className='';
+ rows.forEach((r,i)=>{
+  const wrap=document.createElement('div');wrap.className='row';
+  const left=document.createElement('div');
+  const c=document.createElement('div');c.className='code';c.textContent=r.code;
+  const u=document.createElement('div');u.className='url';u.textContent=r.url;
+  left.append(c,u);
+  const b=document.createElement('button');b.className='secondary small';b.textContent='คัดลอก';
+  b.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(r.url);status.textContent='คัดลอกลิงก์ '+r.code+' แล้ว'}catch(e){status.textContent='คัดลอกไม่สำเร็จ กรุณากดค้างที่ลิงก์เพื่อคัดลอก'}});
+  wrap.append(left,b);list.append(wrap);
+ });
+}
+function save(){try{localStorage.setItem(STORE,JSON.stringify(rows))}catch(e){status.textContent='พื้นที่บันทึกในเบราว์เซอร์เต็ม กรุณาส่งออก CSV สำรองข้อมูล'}}
+document.getElementById('make').addEventListener('click',()=>{
+ const raw=input.value.toUpperCase().split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean);
+ const unique=[...new Set(raw)];const bad=unique.filter(x=>!safeCode(x));
+ if(!unique.length){status.textContent='กรอกรหัสอย่างน้อย 1 รหัสก่อนครับ';return}
+ if(bad.length){status.textContent='รูปแบบรหัสไม่ถูกต้อง: '+bad.slice(0,8).join(', ');return}
+ const add=unique.map(code=>({code,url:link(code),createdAt:new Date().toISOString()}));
+ const map=new Map(rows.map(r=>[r.code,r]));add.forEach(r=>map.set(r.code,r));
+ rows=[...map.values()];save();render();
+ status.textContent='สร้างลิงก์แล้ว '+add.length+' รหัส (ไม่รวมรหัสซ้ำในชุดกรอก)';
+});
+document.getElementById('copyAll').addEventListener('click',async()=>{
+ if(!rows.length){status.textContent='ยังไม่มีลิงก์ให้คัดลอก';return}
+ const text=rows.map(r=>r.code+'\t'+r.url).join('\n');
+ try{await navigator.clipboard.writeText(text);status.textContent='คัดลอกรหัสและลิงก์ทั้งหมดแล้ว'}catch(e){download('teenoi-links.txt',text,'text/plain;charset=utf-8');status.textContent='เบราว์เซอร์ไม่อนุญาตคัดลอก จึงดาวน์โหลดไฟล์แทน'}
+});
+document.getElementById('export').addEventListener('click',()=>{
+ if(!rows.length){status.textContent='ยังไม่มีรายการให้ส่งออก';return}
+ const csv='code,url,created_at\r\n'+rows.map(r=>[r.code,r.url,r.createdAt||''].map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+ download('teenoi-coupon-links.csv','\ufeff'+csv,'text/csv;charset=utf-8');status.textContent='ส่งออก CSV แล้ว';
+});
+document.getElementById('clear').addEventListener('click',()=>{input.value='';status.textContent='ล้างช่องกรอกแล้ว (ไม่ได้ลบประวัติที่แสดง)'});
+function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+render();
+})();
+</script>
+</body>
+</html>
