@@ -21,7 +21,7 @@
   const qr=parsed.getElementById('qr');
   if(qr){
    qr.alt='QR Code '+code;
-   qr.src='https://api.qrserver.com/v1/create-qr-code/?size=145x145&margin=0&data='+encodeURIComponent(code);
+   qr.src='https://api.qrserver.com/v1/create-qr-code/?size=145x145&margin=0&qzone=4&data='+encodeURIComponent(code);
   }
     document.open();document.write('<!doctype html>\n'+parsed.documentElement.outerHTML);document.close();
  }catch(e){msg.textContent='เปิดแม่แบบคูปองไม่สำเร็จ กรุณาลองอีกครั้ง หรือตรวจสอบอินเทอร์เน็ต';document.querySelector('h2').textContent='เปิดคูปองไม่สำเร็จ'}
