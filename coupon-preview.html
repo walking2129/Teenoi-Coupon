@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#d71920">
+<title>e-Coupon Teenoi 100 bath</title>
+<meta name="description" content="e-Coupon Teenoi 100 bath — เปิดเพื่อดูรหัสและ QR Code">
+<meta property="og:type" content="website">
+<meta property="og:title" content="e-Coupon Teenoi 100 bath">
+<meta property="og:description" content="e-Coupon Teenoi 100 bath — เปิดเพื่อดูรหัสและ QR Code">
+<meta property="og:site_name" content="Teenoi Coupon">
+<meta property="og:url" content="https://walking2129.github.io/Teenoi-Coupon/coupon-preview.html">
+<meta name="twitter:card" content="summary">
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f5f5;color:#222;font-family:Arial,"Noto Sans Thai",sans-serif;padding:24px}
+main{width:min(520px,100%);background:#fff;border-radius:16px;padding:22px;box-shadow:0 4px 22px #0001;text-align:center}
+h1{font-size:22px;margin:0 0 10px}p{line-height:1.55;color:#555}
+a{color:#c81920}
+</style>
+</head>
+<body><main><h1>กำลังเปิดคูปอง…</h1><p id="message">กำลังตรวจสอบรหัสและเตรียม QR Code</p><p><a href="/Teenoi-Coupon/coupon-link-generator.html">เปิดเครื่องมือสร้างลิงก์คูปอง</a></p></main>
+<script>
+(async function(){
+ const BASE='/Teenoi-Coupon/';
+ const params=new URLSearchParams(location.search);
+ const code=(params.get('code')||'').trim().toUpperCase();
+ const message=document.getElementById('message');
+ const heading=document.querySelector('h1');
+ if(!/^[A-Z0-9_-]{4,32}$/.test(code)){
+  heading.textContent='ไม่พบรหัสคูปอง';
+  message.textContent='กรุณากลับไปสร้างลิงก์ใหม่และตรวจสอบรหัส';
+  return;
+ }
+ try{
+  const response=await fetch(BASE+'MK966934/(3)/index.html?dynamic_template=1');
+  if(!response.ok) throw new Error('template unavailable');
+  const html=await response.text();
+  const parsed=new DOMParser().parseFromString(html,'text/html');
+  parsed.title='e-Coupon Teenoi 100 bath — '+code;
+  const codeEl=parsed.getElementById('code');
+  if(codeEl) codeEl.textContent=code;
+  const qr=parsed.getElementById('qr');
+  if(qr){
+   qr.alt='QR Code '+code;
+   qr.src='https://api.qrserver.com/v1/create-qr-code/?size=145x145&margin=0&qzone=4&data='+encodeURIComponent(code);
+  }
+  const key='teenoi_'+code.toLowerCase()+'_used_v3_arrow_follow_reswipe';
+  for(const script of parsed.querySelectorAll('script:not([src])')){
+   if(script.textContent.includes("const COUPON_KEY = 'teenoi_mk966934_used_v3_arrow_follow_reswipe';")){
+    script.textContent=script.textContent.replace("const COUPON_KEY = 'teenoi_mk966934_used_v3_arrow_follow_reswipe';","const COUPON_KEY = '"+key+"';");
+   }
+  }
+  for(const [selector,content] of [
+   ['meta[property="og:title"]','e-Coupon Teenoi 100 bath — '+code],
+   ['meta[property="og:description"]','e-Coupon Teenoi 100 bath — '+code],
+   ['meta[property="og:url"]',location.href],
+   ['meta[name="description"]','e-Coupon Teenoi 100 bath — '+code]
+  ]){
+   const el=parsed.querySelector(selector);if(el)el.setAttribute('content',content);
+  }
+  document.open();
+  document.write('<!doctype html>\n'+parsed.documentElement.outerHTML);
+  document.close();
+ }catch(e){
+  heading.textContent='เปิดคูปองไม่สำเร็จ';
+  message.textContent='โหลดแม่แบบคูปองไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';
+ }
+})();
+</script></body>
+</html>
