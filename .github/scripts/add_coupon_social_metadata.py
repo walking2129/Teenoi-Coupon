@@ -13,7 +13,7 @@ SITE_BASE = "https://walking2129.github.io/Teenoi-Coupon"
 PREVIEW_TITLE = "e-Coupon Teenoi 100 bath"
 CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{4,32}$")
 VARIANT_PATTERN = re.compile(r"^\((\d+)\)$")
-COUPON_KEY_PATTERN = re.compile(r"""(const\s+COUPON_KEY\s*=\s*)(?:'[^']*'|"[^"]*")\s*;""")
+COUPON_KEY_PATTERN = re.compile(r"""const\s+COUPON_KEY\s*=\s*(?:'[^']*'|"[^"]*")\s*;""")
 TITLE_PATTERN = re.compile(r"<title\b[^>]*>(.*?)</title\s*>", re.IGNORECASE | re.DOTALL)
 HEAD_PATTERN = re.compile(r"<head\b[^>]*>", re.IGNORECASE)
 META_PATTERN = re.compile(
@@ -60,15 +60,18 @@ for code_dir in Path(".").iterdir():
             continue
 
         html = page.read_text(encoding="utf-8")
-        # Each coupon code must have its own persisted used-state key. A previous
-        # copied template key caused unrelated coupon pages to appear already used.
-        coupon_key = "teenoi_" + code_dir.name.lower() + "_used_v4_arrow_follow_reswipe"
-        html, key_count = COUPON_KEY_PATTERN.subn(
-            lambda match: match.group(1) + "'" + coupon_key + "';",
-            html,
+        # Derive the used-state key from the visible coupon code at runtime.
+        # This works for static pages and for coupon-preview.html, which reuses
+        # this template but changes the visible code before writing the page.
+        dynamic_coupon_key = (
+            "const COUPON_KEY = 'teenoi_' + "
+            "(((document.getElementById('code') && "
+            "document.getElementById('code').textContent) || 'unknown')"
+            ".trim().toLowerCase()) + '_used_v4_arrow_follow_reswipe';"
         )
+        html, key_count = COUPON_KEY_PATTERN.subn(dynamic_coupon_key, html)
         if key_count:
-            print("Set unique usage key:", page, "=>", coupon_key)
+            print("Set runtime usage key:", page, "=> key derived from displayed code")
         variant_number = variant_match.group(1)
         canonical_url = (
             SITE_BASE + "/" + code_dir.name +
