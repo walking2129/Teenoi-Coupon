@@ -13,7 +13,7 @@ SITE_BASE = "https://walking2129.github.io/Teenoi-Coupon"
 PREVIEW_TITLE = "e-Coupon Teenoi 100 bath"
 CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{4,32}$")
 VARIANT_PATTERN = re.compile(r"^\((\d+)\)$")
-COUPON_KEY_PATTERN = re.compile(r"(const\s+COUPON_KEY\s*=\s*)([\'\"])[^\'\"]*\\2\s*;")
+COUPON_KEY_PATTERN = re.compile(r"""(const\s+COUPON_KEY\s*=\s*)(?:'[^']*'|"[^"]*")\s*;""")
 TITLE_PATTERN = re.compile(r"<title\b[^>]*>(.*?)</title\s*>", re.IGNORECASE | re.DOTALL)
 HEAD_PATTERN = re.compile(r"<head\b[^>]*>", re.IGNORECASE)
 META_PATTERN = re.compile(
