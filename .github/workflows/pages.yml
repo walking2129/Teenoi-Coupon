@@ -25,6 +25,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Add social preview metadata to coupon pages
+        run: python3 .github/scripts/add_coupon_social_metadata.py
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
