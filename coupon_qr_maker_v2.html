@@ -53,6 +53,7 @@ let layout={x:0,y:0,size:410,code:''};
 function setStatus(s){statusEl.textContent=s;}
 function setCanvasSize(w,h){canvas.width=w;canvas.height=h;canvas.style.aspectRatio=w+'/'+h;}
 function fitInitialLayout(){
+ sizeRange.disabled=false;
  const max=Math.floor(Math.min(canvas.width,canvas.height)*0.82);
  const min=Math.min(100, max);
  sizeRange.min=String(min);sizeRange.max=String(max);
@@ -98,7 +99,7 @@ function groupBounds(){
  ctx.restore();
  const left=Math.min(layout.x,layout.x+s/2-tw/2)-8;
  const right=Math.max(layout.x+s,layout.x+s/2+tw/2)+8;
- const top=layout.y-8,bottom=layout.y+s+s*0.29+8;
+ const top=layout.y-8,bottom=layout.y+s+s*0.10+8;
  return {left:left,top:top,right:right,bottom:bottom};
 }
 function drawElements(showGuide){
@@ -110,7 +111,7 @@ function drawElements(showGuide){
  const inset=s*0.06;ctx.drawImage(qrSource,layout.x+inset,layout.y+inset,s-2*inset,s-2*inset);
  const font=Math.max(18,Math.round(s*0.155));
  ctx.font='bold '+font+'px Arial,sans-serif';ctx.fillStyle='#171717';ctx.textAlign='center';ctx.textBaseline='alphabetic';
- ctx.fillText(layout.code,layout.x+s/2,layout.y+s+s*0.29,canvas.width-12);
+ ctx.fillText(layout.code,layout.x+s/2,layout.y+s+s*0.10,canvas.width-12);
  ctx.restore();
  if(showGuide){
   const b=groupBounds();ctx.save();ctx.strokeStyle='#1a74a5';ctx.lineWidth=Math.max(2,canvas.width/355);ctx.setLineDash([Math.max(5,canvas.width/100),Math.max(3,canvas.width/180)]);
