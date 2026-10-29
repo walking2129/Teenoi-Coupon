@@ -44,11 +44,12 @@ a{color:#c81920}
    qr.alt='QR Code '+code;
    qr.src='https://api.qrserver.com/v1/create-qr-code/?size=145x145&margin=0&qzone=4&data='+encodeURIComponent(code);
   }
-  const key='teenoi_'+code.toLowerCase()+'_used_v3_arrow_follow_reswipe';
+  const key='teenoi_'+code.toLowerCase()+'_used_v4_arrow_follow_reswipe';
   for(const script of parsed.querySelectorAll('script:not([src])')){
-   if(script.textContent.includes("const COUPON_KEY = 'teenoi_mk966934_used_v3_arrow_follow_reswipe';")){
-    script.textContent=script.textContent.replace("const COUPON_KEY = 'teenoi_mk966934_used_v3_arrow_follow_reswipe';","const COUPON_KEY = '"+key+"';");
-   }
+   script.textContent=script.textContent.replace(
+    /const\s+COUPON_KEY\s*=\s*(['"])[^'"]*\1\s*;/,
+    "const COUPON_KEY = '"+key+"';"
+   );
   }
   for(const [selector,content] of [
    ['meta[property="og:title"]','e-Coupon Teenoi 100 bath — '+code],
