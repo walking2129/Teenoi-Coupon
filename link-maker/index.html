@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f4f6f8">
+<title>ตัวสร้างลิงก์ Teenoi Coupon</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Noto Sans Thai",Tahoma,sans-serif;color:#17202a}
+*{box-sizing:border-box}body{margin:0;background:#f4f6f8}.wrap{max-width:760px;margin:auto;padding:14px}
+.card{background:#fff;border:1px solid #dde3e8;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 10px #0b182008}
+h1{font-size:23px;line-height:1.25;margin:0 0 7px}h2{font-size:17px;margin:0 0 10px}
+p{margin:6px 0 12px;line-height:1.5;color:#596571}
+label{font-weight:700;display:block;margin:12px 0 6px}
+textarea,select{font:inherit;width:100%;border:1px solid #cbd3dc;border-radius:10px;padding:12px;background:white;color:inherit}
+textarea{min-height:145px;resize:vertical;line-height:1.6}
+button{font:inherit;border:0;border-radius:10px;padding:11px 13px;font-weight:750;cursor:pointer}
+button:disabled{opacity:.45;cursor:wait}
+.primary{background:#174b70;color:white;width:100%;margin-top:12px}.secondary{background:#e7edf2;color:#17384d}.copyall{background:#174b70;color:#fff;width:100%;margin-top:10px}
+.status{font-size:13px;color:#596571;margin-top:10px;min-height:20px}
+.results{display:grid;gap:10px}.item{border:1px solid #dfe5eb;border-radius:12px;padding:12px;overflow-wrap:anywhere}
+.row{display:flex;align-items:center;gap:8px;justify-content:space-between}.code{font-weight:800}.pill{font-size:12px;padding:3px 8px;border-radius:99px;background:#e5f5ea;color:#176637}
+.missing .pill{background:#fff2d6;color:#805600}.url{font-size:13px;line-height:1.45;margin:8px 0;word-break:break-all}.item button{font-size:13px}
+.note{background:#f5f7f9;border-radius:10px;padding:11px;font-size:13px;color:#596571;line-height:1.5}
+a{color:#135b86}
+</style>
+</head>
+<body><main class="wrap">
+<section class="card">
+<h1>ตัวสร้างลิงก์ Teenoi Coupon</h1>
+<p>ใส่รหัสคูปองหลายรหัสในครั้งเดียว ระบบจะตรวจสอบว่าหน้าเว็บของรหัสนั้นมีอยู่แล้ว แล้วแสดงลิงก์พร้อมปุ่มคัดลอก</p>
+<label for="codes">รหัสคูปอง (หนึ่งรหัสต่อหนึ่งบรรทัด)</label>
+<textarea id="codes" autocapitalize="characters" placeholder="MLU2638&#10;MLU8963&#10;MLU9013"></textarea>
+<label for="variant">รูปแบบหน้าคูปอง</label>
+<select id="variant"><option value="(3)">แบบ (3) — มาตรฐาน</option><option value="(4)">แบบ (4)</option></select>
+<button class="primary" id="run">ตรวจรหัสและสร้างลิงก์</button>
+<div class="status" id="status">ยังไม่ได้ตรวจรหัส</div>
+</section>
+<section class="card" id="resultCard" hidden>
+<div class="row"><h2>ผลลัพธ์</h2><button class="secondary" id="copyAll">คัดลอกลิงก์ทั้งหมด</button></div>
+<div class="results" id="results"></div>
+</section>
+<section class="card">
+<h2>วิธีทำงาน</h2>
+<div class="note">เครื่องมือนี้สร้างลิงก์ให้เฉพาะหน้าคูปองที่มีอยู่แล้วในเว็บไซต์ จะแสดงสถานะ “ยังไม่มีหน้า” ถ้าไม่พบไฟล์ของรหัสนั้น เพื่อป้องกันการส่งลิงก์ที่เปิดไม่ได้ เครื่องมือนี้ไม่ได้ออกหรือยืนยันสิทธิ์คูปองใหม่</div>
+</section>
+</main>
+<script>
+const OWNER='walking2129',REPO='Teenoi-Coupon',BRANCH='main';
+const $=id=>document.getElementById(id);
+const run=$('run'),status=$('status'),results=$('results'),resultCard=$('resultCard');
+let validUrls=[];
+function cleanCode(v){return v.trim().toUpperCase().replace(/\s+/g,'');}
+function targetUrl(code,variant){return 'https://'+OWNER+'.github.io/'+REPO+'/'+encodeURIComponent(code)+'/'+encodeURIComponent(variant)+'/';}
+async function exists(code,variant){
+ const path=['contents',encodeURIComponent(code),encodeURIComponent(variant),'index.html'].join('/');
+ const api='https://api.github.com/repos/'+OWNER+'/'+REPO+'/'+path+'?ref='+BRANCH;
+ const res=await fetch(api,{headers:{'Accept':'application/vnd.github+json'}});
+ if(res.status===404)return false;
+ if(res.status===403)throw new Error('GitHub จำกัดการตรวจสอบชั่วคราว กรุณารอสักครู่แล้วลองใหม่');
+ if(!res.ok)throw new Error('ตรวจสอบ GitHub ไม่สำเร็จ ('+res.status+')');
+ const data=await res.json();return data&&data.type==='file';
+}
+function makeItem(code,url,found){
+ const box=document.createElement('div');box.className='item'+(found?'':' missing');
+ const top=document.createElement('div');top.className='row';
+ const name=document.createElement('span');name.className='code';name.textContent=code;
+ const pill=document.createElement('span');pill.className='pill';pill.textContent=found?'พบหน้าเว็บ':'ยังไม่มีหน้า';
+ top.append(name,pill);box.append(top);
+ if(found){
+  const a=document.createElement('a');a.className='url';a.href=url;a.target='_blank';a.rel='noopener';a.textContent=url;box.append(a);
+  const copy=document.createElement('button');copy.className='secondary';copy.textContent='คัดลอกลิงก์';copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(url);copy.textContent='คัดลอกแล้ว';setTimeout(()=>copy.textContent='คัดลอกลิงก์',1300)}catch(e){window.prompt('คัดลอกลิงก์นี้',url)}});box.append(copy);
+ }else{
+  const note=document.createElement('div');note.className='url';note.textContent='ยังไม่พบไฟล์ '+code+'/'+$('variant').value+'/index.html ในเว็บไซต์ จึงยังไม่สร้างลิงก์ที่อ้างว่าใช้งานได้';box.append(note);
+ }
+ results.append(box);if(found)validUrls.push(url);
+}
+run.addEventListener('click',async()=>{
+ const codes=Array.from(new Set($('codes').value.split(/[\n,;]+/).map(cleanCode).filter(Boolean)));
+ const variant=$('variant').value;
+ if(!codes.length){status.textContent='กรุณาใส่รหัสอย่างน้อย 1 รหัส';return}
+ const invalid=codes.filter(c=>!/^[A-Z0-9_-]{3,30}$/.test(c));
+ if(invalid.length){status.textContent='รูปแบบรหัสไม่ถูกต้อง: '+invalid.join(', ');return}
+ results.innerHTML='';validUrls=[];resultCard.hidden=false;run.disabled=true;
+ let foundCount=0,missingCount=0;
+ status.textContent='กำลังตรวจ '+codes.length+' รหัส…';
+ try{
+  for(let i=0;i<codes.length;i++){
+   status.textContent='กำลังตรวจ '+(i+1)+'/'+codes.length+' — '+codes[i];
+   const found=await exists(codes[i],variant);
+   makeItem(codes[i],targetUrl(codes[i],variant),found);
+   if(found)foundCount++;else missingCount++;
+  }
+  status.textContent='เสร็จแล้ว: พบ '+foundCount+' ลิงก์'+(missingCount?' · ยังไม่มีหน้า '+missingCount+' รหัส':'');
+ }catch(e){status.textContent=e.message||'ตรวจสอบไม่สำเร็จ กรุณาลองใหม่';}
+ finally{run.disabled=false;}
+});
+$('copyAll').addEventListener('click',async()=>{
+ if(!validUrls.length){status.textContent='ยังไม่มีลิงก์ที่ตรวจพบ';return}
+ const txt=validUrls.join('\n');
+ try{await navigator.clipboard.writeText(txt);$('copyAll').textContent='คัดลอกแล้ว';setTimeout(()=>$('copyAll').textContent='คัดลอกลิงก์ทั้งหมด',1400)}
+ catch(e){window.prompt('คัดลอกลิงก์ทั้งหมด',txt)}
+});
+</script></body></html>
