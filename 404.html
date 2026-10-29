@@ -23,6 +23,9 @@
    qr.alt='QR Code '+code;
    qr.src='https://api.qrserver.com/v1/create-qr-code/?size=145x145&margin=0&qzone=4&data='+encodeURIComponent(code);
   }
+  const sizing=parsed.createElement('style');
+  sizing.textContent='#qr{left:23%;top:41vw;width:54%;}#code{top:96.5vw;}';
+  parsed.head.appendChild(sizing);
     document.open();document.write('<!doctype html>\n'+parsed.documentElement.outerHTML);document.close();
  }catch(e){msg.textContent='เปิดแม่แบบคูปองไม่สำเร็จ กรุณาลองอีกครั้ง หรือตรวจสอบอินเทอร์เน็ต';document.querySelector('h2').textContent='เปิดคูปองไม่สำเร็จ'}
 })();
