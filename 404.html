@@ -68,13 +68,13 @@ a{color:#c81920}
    'https://unpkg.com/jsbarcode@3.12.1/dist/JsBarcode.all.min.js'
   ],()=>typeof window.JsBarcode==='function');
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-  window.JsBarcode(svg,code,{format:'CODE128B',lineColor:'#000000',background:'#ffffff',displayValue:false,margin:0,width:2.8,height:100});
+  window.JsBarcode(svg,code,{format:'CODE128B',lineColor:'#000000',background:'#ffffff',displayValue:false,margin:0,width:4,height:185});
   const img=await svgToImage(svg);
-  const canvas=document.createElement('canvas');canvas.width=594;canvas.height=120;
+  const canvas=document.createElement('canvas');canvas.width=720;canvas.height=205;
   const ctx=canvas.getContext('2d',{alpha:false});
   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,594,120);
   ctx.imageSmoothingEnabled=false;
-  const scale=Math.min(500/img.naturalWidth,100/img.naturalHeight);
+  const scale=Math.min(680/img.naturalWidth,185/img.naturalHeight);
   const w=img.naturalWidth*scale,h=img.naturalHeight*scale;
   ctx.drawImage(img,(594-w)/2,(120-h)/2,w,h);
   await loadScript([
