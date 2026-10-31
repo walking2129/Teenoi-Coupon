@@ -24,11 +24,11 @@ input[type=file]{font-size:14px;padding:8px}input[type=range]{padding:0;accent-c
 <body><main class="wrap">
 <section class="panel">
 <h1>เครื่องมือสร้าง QR บนแม่แบบ</h1>
-<p>ใส่เลขครั้งเดียว เลขเดียวกันจะอยู่ใน QR และข้อความกำกับโดยอัตโนมัติ แตะแล้วลาก QR เพื่อย้ายทั้งชุด และปรับขนาดได้</p>
+<p>ใส่รหัสหรือข้อความได้ทั้งตัวอักษรและตัวเลข ข้อมูลเดียวกันจะอยู่ใน QR และข้อความกำกับโดยอัตโนมัติ แตะแล้วลาก QR เพื่อย้ายทั้งชุด และปรับขนาดได้</p>
 <div class="template-row"><div style="flex:1;min-width:0"><label for="templateFile" style="margin-top:4px">ภาพแม่แบบ</label><input id="templateFile" type="file" accept="image/png,image/jpeg,image/webp"><div id="templateStatus" class="small">เลือกภาพแม่แบบเพื่อเริ่มต้น</div></div><button id="changeTemplate" class="btn secondary" type="button" hidden>เปลี่ยนแม่แบบ</button></div>
-<label for="codeInput">เลขคูปอง / ข้อความใน QR</label>
-<input id="codeInput" autocomplete="off" inputmode="numeric" placeholder="กรอกเลขเพียงช่องเดียว">
-<div class="note">เลขในช่องนี้จะถูกใช้ทั้งใน QR และข้อความใต้ QR ให้ตรงกันทุกครั้ง ใช้เฉพาะเลขหรือข้อมูลที่ได้รับอนุญาตจากผู้ออกคูปอง</div>
+<label for="codeInput">รหัสคูปอง / ข้อความใน QR</label>
+<input id="codeInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" placeholder="กรอกรหัสหรือข้อความ ทั้งตัวอักษรและตัวเลข">
+<div class="note">ข้อความในช่องนี้จะถูกใช้ทั้งใน QR และข้อความใต้ QR ให้ตรงกันทุกครั้ง ใช้เฉพาะข้อมูลที่ได้รับอนุญาตจากผู้ออกคูปอง</div>
 <label for="sizeRange">ขนาด QR (ข้อความจะปรับตามขนาด)</label>
 <div class="range-row"><input id="sizeRange" type="range" min="100" max="1000" step="5" value="410" disabled><span id="sizeValue" class="range-value">—</span></div>
 <button class="btn primary" id="makeBtn" type="button">สร้าง QR และข้อความ</button>
@@ -140,7 +140,7 @@ function makeQR(text){
 document.getElementById('makeBtn').addEventListener('click',async function(){
  if(!templateReady){setStatus('กรุณาเลือกภาพแม่แบบก่อน');return;}
  const code=codeInput.value.trim();
- if(!code){setStatus('กรุณากรอกเลขก่อนสร้าง QR');codeInput.focus();return;}
+ if(!code){setStatus('กรุณากรอกรหัสหรือข้อความก่อนสร้าง QR');codeInput.focus();return;}
  setStatus('กำลังสร้าง QR…');saveBtn.disabled=true;qrReady=false;
  try{
   const source=await makeQR(code);
