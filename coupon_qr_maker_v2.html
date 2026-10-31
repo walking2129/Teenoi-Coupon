@@ -178,11 +178,25 @@ function makeQR(text){
    hints.set(ZXing.EncodeHintType.ERROR_CORRECTION,ZXing.QRCodeDecoderErrorCorrectionLevel.H);
    hints.set(ZXing.EncodeHintType.MARGIN,4);
    const svg=new ZXing.BrowserQRCodeSvgWriter().write(text,700,700,hints);
-   const markup=new XMLSerializer().serializeToString(svg);
-   const img=new Image();
-   img.onload=function(){resolve(img);};
-   img.onerror=function(){reject(new Error('แปลง QR เป็นภาพไม่สำเร็จ กรุณาลองอีกครั้ง'));};
-   img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(markup);
+   // Paint only the black QR modules onto a transparent canvas.
+   // This prevents an SVG/image background from covering the coupon template.
+   const width=Number(svg.getAttribute('width'))||700;
+   const height=Number(svg.getAttribute('height'))||700;
+   const out=document.createElement('canvas');
+   out.width=width;out.height=height;
+   const qctx=out.getContext('2d');
+   qctx.clearRect(0,0,width,height);
+   const modules=svg.querySelectorAll('rect');
+   if(!modules.length)throw new Error('ไม่พบจุด QR สำหรับวาดภาพ');
+   qctx.fillStyle='#071820';
+   modules.forEach(function(node){
+    const x=Number(node.getAttribute('x'))||0;
+    const y=Number(node.getAttribute('y'))||0;
+    const w=Number(node.getAttribute('width'))||0;
+    const h=Number(node.getAttribute('height'))||0;
+    if(w>0&&h>0)qctx.fillRect(x,y,w,h);
+   });
+   resolve(out);
   }catch(e){reject(new Error('สร้าง QR ไม่สำเร็จ: '+(e.message||'กรุณาตรวจสอบข้อความ')));}
  });
 }
