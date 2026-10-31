@@ -100,7 +100,7 @@ html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#f3f3
         <div id="timer">02:00:00</div>
       </div>
     </div>
-    <button id="usedButton" type="button" aria-label="Press used">PRESS USED</button>
+    <button id="usedButton" type="button" aria-label="เลื่อนเมื่อใช้แล้ว">เลื่อนเมื่อใช้แล้ว</button>
 
     <div id="terms">
       <div class="terms-section">
@@ -142,7 +142,7 @@ html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#f3f3
   function setUsedVisual(){ used=true; usedButton.textContent='USED'; usedButton.disabled=false; usedButton.classList.remove('dragging'); usedButton.classList.add('used-complete'); usedButton.style.setProperty('--swipe-x','7px'); usedButton.setAttribute('aria-label','Swipe right to reactivate coupon'); page2wrap.classList.add('used-state'); timer.textContent='00.00.00'; }
   function restoreUsedState(){if(!storageGet())return false;setUsedVisual();return true;}
   function markUsed(){if(used)return;storageSet('1');if(timerInterval)clearInterval(timerInterval);timerInterval=null;setUsedVisual();}
-  function resetToActive(){storageRemove();used=false;page2wrap.classList.remove('used-state');usedButton.textContent='PRESS USED';usedButton.disabled=false;usedButton.classList.remove('used-complete','dragging');usedButton.style.setProperty('--swipe-x','7px');remaining=2*60*60;timerStarted=false;if(timerInterval)clearInterval(timerInterval);timerInterval=null;timer.textContent='02:00:00';startTimer();}
+  function resetToActive(){storageRemove();used=false;page2wrap.classList.remove('used-state');usedButton.textContent='เลื่อนเมื่อใช้แล้ว';usedButton.disabled=false;usedButton.classList.remove('used-complete','dragging');usedButton.style.setProperty('--swipe-x','7px');remaining=2*60*60;timerStarted=false;if(timerInterval)clearInterval(timerInterval);timerInterval=null;timer.textContent='02:00:00';startTimer();}
   function startTimer(){if(timerStarted||used)return;timerStarted=true;const tick=()=>{if(used)return;const h=Math.floor(remaining/3600),m=Math.floor((remaining%3600)/60),sec=remaining%60;timer.textContent=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');if(remaining>0)remaining--;else{clearInterval(timerInterval);timerInterval=null;timer.textContent='00.00.00';}};tick();timerInterval=setInterval(tick,1000);}
   function openCoupon(){if(opened)return;opened=true;page1.classList.add('hidden');page2.classList.remove('hidden');if(!restoreUsedState())startTimer();}
   arrow.addEventListener('pointerdown',e=>{if(opened)return;dragging=true;startX=e.clientX;startLeftPx=arrow.getBoundingClientRect().left;arrow.classList.add('dragging');arrow.setPointerCapture?.(e.pointerId);e.preventDefault();});
