@@ -50,7 +50,7 @@ a{color:#c81920}
  async function openSwensen(code){
   heading.textContent="e-Coupon Swensen's";
   msg.textContent='กำลังเตรียมคูปอง '+code+' ...';
-  const response=await fetch(BASE+'Swensen/Master/index.html?template=1');
+  const response=await fetch(BASE+'Swensen/Master/index.html?template=2');
   if(!response.ok)throw new Error('โหลดแม่แบบ Swensen ไม่สำเร็จ ('+response.status+')');
   const html=await response.text();
   const parsed=new DOMParser().parseFromString(html,'text/html');
@@ -70,11 +70,11 @@ a{color:#c81920}
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
   window.JsBarcode(svg,code,{format:'CODE128B',lineColor:'#000000',background:'#ffffff',displayValue:false,margin:0,width:4,height:185});
   const img=await svgToImage(svg);
-  const canvas=document.createElement('canvas');canvas.width=720;canvas.height=205;
+  const canvas=document.createElement('canvas');canvas.width=748;canvas.height=205;
   const ctx=canvas.getContext('2d',{alpha:false});
   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,594,120);
   ctx.imageSmoothingEnabled=false;
-  const scale=Math.min(680/img.naturalWidth,185/img.naturalHeight);
+  const scale=Math.min(668/img.naturalWidth,185/img.naturalHeight);
   const w=img.naturalWidth*scale,h=img.naturalHeight*scale;
   ctx.drawImage(img,(594-w)/2,(120-h)/2,w,h);
   await loadScript([
