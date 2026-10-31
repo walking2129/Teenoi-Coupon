@@ -32,6 +32,7 @@ button{border:0;border-radius:10px;padding:12px 15px;font-size:15px;font-weight:
 <button class="primary" id="make">สร้างลิงก์</button>
 <button class="secondary" id="copyAll">คัดลอกลิงก์ทั้งหมด</button>
 <button class="secondary" id="export">ส่งออก CSV</button>
+<button class="secondary" id="clearHistory">ลบประวัติ</button>
 <button class="secondary" id="clear">ล้างช่องกรอก</button>
 </div>
 <div id="status" role="status" aria-live="polite"></div>
@@ -115,6 +116,14 @@ document.getElementById('export').addEventListener('click',()=>{
  download('teenoi-coupon-links.csv','\ufeff'+csv,'text/csv;charset=utf-8');status.textContent='ส่งออก CSV แล้ว';
 });
 document.getElementById('clear').addEventListener('click',()=>{input.value='';status.textContent='ล้างช่องกรอกแล้ว (ไม่ได้ลบประวัติที่แสดง)'});
+document.getElementById('clearHistory').addEventListener('click',()=>{
+ if(!rows.length){status.textContent='ไม่มีประวัติให้ลบ';return}
+ if(!confirm('ลบเฉพาะประวัติที่แสดงใช่ไหม? ลิงก์คูปองตี๋น้อยที่สร้างไว้จะยังเปิดใช้งานได้'))return;
+ rows=[];
+ try{localStorage.removeItem(STORE)}catch(e){}
+ render();
+ status.textContent='ลบประวัติแล้ว · ลิงก์คูปองเดิมยังใช้งานได้';
+});
 function download(name,text,mime){const blob=new Blob([text],{type:mime});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 render();
 })();
