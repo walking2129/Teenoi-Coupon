@@ -51,33 +51,24 @@ h2{font-size:18px;margin:0 0 12px}
 <button class="secondary" id="clear">ล้างช่องกรอก</button>
 </div>
 <div id="status" role="status" aria-live="polite"></div>
-<p class="note">ลิงก์ใช้รูปแบบ <b>Swensen/รหัส/(1)/</b> หน้าแสดงคูปองยึดแม่แบบต้นฉบับ: ปัดเพื่อเปิดคูปอง, บาร์โค้ด Code 128-B, ตัวจับเวลา 2 ชั่วโมง และปุ่มปัด PRESS USED / USED โดยแยกสถานะตามรหัสคูปอง</p>
+<p class="note">ลิงก์ใหม่ใช้หน้าเปิดคูปองที่มีข้อมูลการ์ดข้อความสำหรับ Messenger หน้าแสดงคูปองยึดแม่แบบต้นฉบับ: ปัดเพื่อเปิดคูปอง, บาร์โค้ด Code 128-B, ตัวจับเวลา 2 ชั่วโมง และปุ่มปัด PRESS USED / USED โดยแยกสถานะตามรหัสคูปอง</p>
 </section>
 <section class="results">
 <h2>ผลลัพธ์และรายการล่าสุดในเบราว์เซอร์นี้</h2>
 <div id="list" class="empty">ยังไม่มีรายการในหน้านี้</div>
-<p class="note">รายการล่าสุดบันทึกไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น ควรส่งออก CSV เพื่อสำรองข้อมูล ลิงก์จะอยู่บน GitHub Pages ของ walking2129 โดยใช้หน้าตาตามแม่แบบ Swensen ที่อ้างอิง แต่การสร้างลิงก์ไม่ได้ตรวจสอบว่ารหัสนั้นยังมีสิทธิ์ใช้งานจริงกับ Swensen's</p>
+<p class="note">รายการล่าสุดบันทึกไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น ควรส่งออก CSV เพื่อสำรองข้อมูล รายการลิงก์ถูกบันทึกไว้ในเบราว์เซอร์นี้เท่านั้น ควรส่งออก CSV เพื่อสำรองข้อมูล การ์ด Messenger เป็นข้อความ ไม่มีภาพตัวอย่าง และการสร้างลิงก์ไม่ได้ตรวจสอบว่ารหัสนั้นยังมีสิทธิ์ใช้งานจริงกับ Swensen's</p>
 </section>
 </main>
 <script>
 (function(){
 'use strict';
 const BASE='https://walking2129.github.io/Teenoi-Coupon/';
-const API='https://api.github.com/repos/walking2129/Teenoi-Coupon/contents/';
 const STORE='swensen-link-generator-history-v1';
 const input=document.getElementById('codes'),list=document.getElementById('list'),status=document.getElementById('status');
 let rows=[];
-try{const saved=JSON.parse(localStorage.getItem(STORE)||'[]');if(Array.isArray(saved))rows=saved.filter(x=>x&&x.code&&x.url)}catch(e){}
+try{const saved=JSON.parse(localStorage.getItem(STORE)||'[]');if(Array.isArray(saved))rows=saved.filter(x=>x&&x.code&&x.url).map(x=>({...x,url:BASE+'Swensen/open/?code='+encodeURIComponent(String(x.code).toUpperCase())}))}catch(e){}
 function validCode(s){return /^[A-Z0-9_-]{4,32}$/.test(s)}
-function couponUrl(code){return BASE+'Swensen/'+encodeURIComponent(code)+'/%281%29/'}
-async function pageExists(code){
- const path='Swensen/'+encodeURIComponent(code)+'/%281%29/index.html?ref=main';
- const res=await fetch(API+path,{headers:{'Accept':'application/vnd.github+json'}});
- if(res.status===404)return false;
- if(res.status===403)throw new Error('GitHub จำกัดการตรวจสอบชั่วคราว กรุณารอสักครู่แล้วลองใหม่');
- if(!res.ok)throw new Error('ตรวจสอบหน้า Swensen ไม่สำเร็จ ('+res.status+')');
- const data=await res.json();return !!(data&&data.type==='file');
-}
+function couponUrl(code){return BASE+'Swensen/open/?code='+encodeURIComponent(code)}
 function save(){try{localStorage.setItem(STORE,JSON.stringify(rows))}catch(e){status.textContent='พื้นที่บันทึกในเบราว์เซอร์เต็ม กรุณาส่งออก CSV เพื่อสำรองข้อมูล'}}
 function render(){
  list.textContent='';
@@ -88,7 +79,7 @@ function render(){
   const left=document.createElement('div');
   const code=document.createElement('div');code.className='code';code.textContent=r.code;
   const url=document.createElement('div');url.className='url';url.textContent=r.url;
-  const badge=document.createElement('div');badge.className='badge';badge.textContent=r.dynamic?'หน้าแม่แบบอัตโนมัติ':'พบไฟล์คูปองจริง';
+  const badge=document.createElement('div');badge.className='badge';badge.textContent="e-Coupon เงินสด Swensen's";
   left.append(code,url,badge);
   const actions=document.createElement('div');actions.className='row-actions';
   const open=document.createElement('a');open.className='open';open.href=r.url;open.target='_blank';open.rel='noopener';open.textContent='เปิด';
@@ -106,17 +97,14 @@ document.getElementById('make').addEventListener('click',async()=>{
  const button=document.getElementById('make');button.disabled=true;
  const additions=[];
  try{
-  let existing=0,dynamic=0;
   for(let i=0;i<unique.length;i++){
-   status.textContent='กำลังตรวจสอบ '+(i+1)+'/'+unique.length+' — '+unique[i];
-   const hasPage=await pageExists(unique[i]);
-   additions.push({code:unique[i],url:couponUrl(unique[i]),dynamic:!hasPage,createdAt:new Date().toISOString()});
-   if(hasPage)existing++;else dynamic++;
+   status.textContent='กำลังสร้างลิงก์ '+(i+1)+'/'+unique.length+' — '+unique[i];
+   additions.push({code:unique[i],url:couponUrl(unique[i]),dynamic:true,createdAt:new Date().toISOString()});
   }
   const map=new Map(rows.map(r=>[r.code,r]));additions.forEach(r=>map.set(r.code,r));
   rows=[...map.values()];save();render();
-  status.textContent='เสร็จแล้ว '+additions.length+' รหัส · มีไฟล์คูปองจริง '+existing+' · ใช้แม่แบบอัตโนมัติ '+dynamic;
- }catch(e){status.textContent=e.message||'ตรวจสอบไม่สำเร็จ กรุณาลองใหม่'}
+  status.textContent='เสร็จแล้ว '+additions.length+' รหัส · ลิงก์พร้อมการ์ดข้อความใน Messenger';
+ }catch(e){status.textContent=e.message||'สร้างลิงก์ไม่สำเร็จ กรุณาลองใหม่'}
  finally{button.disabled=false}
 });
 document.getElementById('copyAll').addEventListener('click',async()=>{

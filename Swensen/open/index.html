@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>e-Coupon เงินสด Swensen's</title>
+<meta name="description" content="คูปองเงินสด Swensen's กดลิงก์เพื่อเปิด e-Coupon และแสดงบาร์โค้ดบนโทรศัพท์มือถือ">
+<meta name="theme-color" content="#cf1728">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Swensen's">
+<meta property="og:title" content="e-Coupon เงินสด Swensen's">
+<meta property="og:description" content="คูปองเงินสด Swensen's กดลิงก์เพื่อเปิด e-Coupon และแสดงบาร์โค้ดบนโทรศัพท์มือถือ">
+<meta property="og:locale" content="th_TH">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:#f7f7f7;color:#222;font-family:Arial,"Noto Sans Thai",sans-serif;display:grid;place-items:center;padding:20px}
+main{background:#fff;max-width:460px;width:100%;padding:26px;border-radius:18px;text-align:center;box-shadow:0 5px 24px #0001}
+h1{font-size:21px;margin:0 0 10px;color:#c8192c}
+p{font-size:15px;line-height:1.6;margin:0;color:#555}
+</style>
+</head>
+<body>
+<main><h1 id="heading">กำลังเปิด e-Coupon เงินสด Swensen's</h1><p id="message">กำลังเตรียมบาร์โค้ดคูปอง กรุณารอสักครู่</p></main>
+<script>
+(async function(){
+'use strict';
+const BASE='https://walking2129.github.io/Teenoi-Coupon/';
+const heading=document.getElementById('heading'),message=document.getElementById('message');
+const code=(new URLSearchParams(location.search).get('code')||'').toUpperCase();
+function fail(title,detail){heading.textContent=title;message.textContent=detail}
+function loadScript(urls,ready){
+ if(ready())return Promise.resolve();
+ return new Promise(async(resolve,reject)=>{
+  let lastError;
+  for(const url of urls){
+   try{
+    await new Promise((res,rej)=>{
+     const script=document.createElement('script');script.src=url;script.async=true;
+     script.onload=()=>res();script.onerror=()=>{script.remove();rej(new Error('โหลดไลบรารีไม่สำเร็จ'))};
+     document.head.appendChild(script);
+    });
+    if(ready())return resolve();
+   }catch(e){lastError=e}
+  }
+  reject(lastError||new Error('ไม่พบไลบรารีที่ต้องใช้'));
+ });
+}
+function svgToImage(svg){
+ return new Promise((resolve,reject)=>{
+  const blob=new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(blob),img=new Image();
+  img.onload=()=>{URL.revokeObjectURL(url);resolve(img)};
+  img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('สร้างภาพบาร์โค้ดไม่สำเร็จ'))};
+  img.src=url;
+ });
+}
+async function openCoupon(){
+ const response=await fetch(BASE+'Swensen/Master/index.html?template=4');
+ if(!response.ok)throw new Error('โหลดแม่แบบ Swensen ไม่สำเร็จ ('+response.status+')');
+ const parsed=new DOMParser().parseFromString(await response.text(),'text/html');
+ const codeEl=parsed.getElementById('code'),barcode=parsed.getElementById('barcode');
+ if(!codeEl||!barcode)throw new Error('แม่แบบไม่มีช่องรหัสหรือบาร์โค้ด');
+ codeEl.textContent=code;barcode.alt="Swensen's Code 128-B barcode "+code;
+ parsed.title="e-Coupon Swensen's 100 bath — "+code;
+ const couponScript=[...parsed.scripts].find(s=>s.textContent.includes('COUPON_KEY'));
+ if(!couponScript)throw new Error('ไม่พบระบบสถานะ USED ในแม่แบบ');
+ couponScript.textContent=couponScript.textContent.replace(/const COUPON_KEY\s*=\s*['"][^'"]+['"];?/, "const COUPON_KEY="+JSON.stringify('swensen_'+code+'_used_v1')+';');
+ await loadScript([
+  'https://cdn.jsdelivr.net/npm/jsbarcode@3.12.1/dist/JsBarcode.all.min.js',
+  'https://unpkg.com/jsbarcode@3.12.1/dist/JsBarcode.all.min.js'
+ ],()=>typeof window.JsBarcode==='function');
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+ window.JsBarcode(svg,code,{format:'CODE128B',lineColor:'#000000',background:'#ffffff',displayValue:false,margin:0,width:4,height:185});
+ const img=await svgToImage(svg);
+ const canvas=document.createElement('canvas');canvas.width=748;canvas.height=205;
+ const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,748,205);ctx.imageSmoothingEnabled=false;
+ const scale=Math.min(668/img.naturalWidth,185/img.naturalHeight),w=img.naturalWidth*scale,h=img.naturalHeight*scale;
+ ctx.drawImage(img,(748-w)/2,(205-h)/2,w,h);
+ await loadScript([
+  'https://cdn.jsdelivr.net/npm/@zxing/browser@0.2.1/umd/zxing-browser.min.js',
+  'https://unpkg.com/@zxing/browser@0.2.1/umd/zxing-browser.min.js'
+ ],()=>!!(window.ZXingBrowser&&window.ZXingBrowser.BrowserMultiFormatReader));
+ const reader=new window.ZXingBrowser.BrowserMultiFormatReader();
+ const decoded=await reader.decodeFromCanvas(canvas),actual=typeof decoded.getText==='function'?decoded.getText():'';
+ if(actual!==code)throw new Error('ตรวจสอบบาร์โค้ดไม่ผ่าน: รหัสที่อ่านได้ไม่ตรงกัน');
+ barcode.src=canvas.toDataURL('image/png');
+ document.open();document.write('<!doctype html>\n'+parsed.documentElement.outerHTML);document.close();
+}
+if(!/^[A-Z0-9_-]{4,32}$/.test(code)){fail('รหัสคูปองไม่ถูกต้อง','กรุณากลับไปสร้างลิงก์ใหม่และตรวจสอบรหัสอีกครั้ง');return}
+try{await openCoupon()}catch(e){fail('เปิดคูปอง Swensen ไม่สำเร็จ',(e&&e.message)||'กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่')}
+})();
+</script>
+</body>
+</html>
