@@ -17,7 +17,7 @@ input[type=file]{font-size:14px;padding:8px}input[type=range]{padding:0;accent-c
 .range-row{display:flex;gap:12px;align-items:center}.range-row input{flex:1}.range-value{min-width:65px;text-align:right;font-size:13px;font-weight:650}
 .preview{width:100%;height:auto;display:block;border:1px solid #dfe4e8;border-radius:10px;background:#fff;touch-action:none;cursor:move}
 .hidden{position:fixed;left:-20000px;top:-20000px;visibility:hidden}
-.template-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.template-row .btn{width:auto;margin:0;white-space:nowrap}
+.template-row{display:flex;align-items:center;justify-content:space-between;gap:8px}.template-row select{flex:1;min-width:0}.template-row .btn{width:auto;margin:0;white-space:nowrap}
 @media(max-width:420px){.panel{padding:12px}.wrap{padding:8px}.template-row{align-items:flex-start;flex-direction:column}.template-row .btn{width:100%}}
 </style>
 </head>
@@ -25,7 +25,11 @@ input[type=file]{font-size:14px;padding:8px}input[type=range]{padding:0;accent-c
 <section class="panel">
 <h1>เครื่องมือสร้าง QR บนแม่แบบ</h1>
 <p>เลือกสร้างได้ทีละแบบ: QR Code หรือบาร์โค้ด Code 128 ใส่รหัสแล้วสร้างเฉพาะรูปแบบที่เลือก จากนั้นลากย้ายและปรับขนาดได้</p>
-<div class="template-row"><div style="flex:1;min-width:0"><label for="templateFile" style="margin-top:4px">ภาพแม่แบบ</label><input id="templateFile" type="file" accept="image/png,image/jpeg,image/webp"><div id="templateStatus" class="small">เลือกภาพแม่แบบเพื่อเริ่มต้น</div></div><button id="changeTemplate" class="btn secondary" type="button" hidden>เปลี่ยนแม่แบบ</button></div>
+<label for="templateSelect">เลือกแม่แบบที่บันทึกไว้</label>
+<div class="template-row"><select id="templateSelect" disabled><option value="">ยังไม่มีแม่แบบ</option></select><button id="deleteTemplate" class="btn secondary" type="button" disabled>ลบแม่แบบ</button></div>
+<label for="templateFile">เพิ่มแม่แบบใหม่</label>
+<input id="templateFile" type="file" accept="image/png,image/jpeg,image/webp">
+<div id="templateStatus" class="small">เพิ่มภาพแม่แบบใหม่ได้หลายภาพ และสลับเลือกใช้ได้ภายหลัง</div>
 <label for="codeType">เลือกรูปแบบ</label>
 <select id="codeType"><option value="qr">QR Code</option><option value="barcode">บาร์โค้ด (Code 128)</option></select>
 <label for="codeInput">รหัสคูปอง / ข้อความ</label>
@@ -47,15 +51,19 @@ input[type=file]{font-size:14px;padding:8px}input[type=range]{padding:0;accent-c
 <script>
 (function(){
 'use strict';
-const KEY='coupon_qr_maker_v2_template';
+const LIBRARY_KEY='coupon_qr_maker_v2_templates';
+const LEGACY_KEY='coupon_qr_maker_v2_template';
+const ACTIVE_KEY='coupon_qr_maker_v2_active_template';
 const canvas=document.getElementById('preview'),ctx=canvas.getContext('2d');
 const statusEl=document.getElementById('status'),saveBtn=document.getElementById('saveBtn');
-const templateInput=document.getElementById('templateFile'),changeBtn=document.getElementById('changeTemplate');
+const templateInput=document.getElementById('templateFile'),templateSelect=document.getElementById('templateSelect');
+const deleteTemplateBtn=document.getElementById('deleteTemplate'),templateStatus=document.getElementById('templateStatus');
 const sizeRange=document.getElementById('sizeRange'),sizeValue=document.getElementById('sizeValue'),codeInput=document.getElementById('codeInput');
 const textSizeRange=document.getElementById('textSizeRange'),textSizeValue=document.getElementById('textSizeValue'),textSizeLabel=document.getElementById('textSizeLabel');
 const codeTypeInput=document.getElementById('codeType'),sizeLabel=document.getElementById('sizeLabel'),makeBtn=document.getElementById('makeBtn');
 const qrstage=document.getElementById('qrstage');
 let bg=new Image(),qrSource=null,barcodeSource=null,qrReady=false,templateReady=false,dragging=false,dragStart=null;
+let templates=[],activeTemplateId=null;
 let layout={x:0,y:0,size:410,textSize:63,code:''};
 function setStatus(s){statusEl.textContent=s;}
 function setCanvasSize(w,h){canvas.width=w;canvas.height=h;canvas.style.aspectRatio=w+'/'+h;}
@@ -94,33 +102,129 @@ function fitInitialLayout(){
  layout.y=Math.max(0,Math.min(Math.floor(canvas.height*0.29),maxLayoutY()));
  sizeRange.value=String(layout.size);sizeValue.textContent=layout.size+' px';
 }
+function templateId(){
+ return String(Date.now())+'_'+Math.random().toString(36).slice(2,9);
+}
+function persistTemplates(){
+ try{localStorage.setItem(LIBRARY_KEY,JSON.stringify(templates));return true;}
+ catch(e){return false;}
+}
+function refreshTemplateSelect(){
+ templateSelect.innerHTML='';
+ if(!templates.length){
+  const opt=document.createElement('option');opt.value='';opt.textContent='ยังไม่มีแม่แบบที่บันทึกไว้';templateSelect.appendChild(opt);
+  templateSelect.disabled=true;deleteTemplateBtn.disabled=true;return;
+ }
+ templates.forEach(function(item){
+  const opt=document.createElement('option');opt.value=item.id;opt.textContent=item.name;templateSelect.appendChild(opt);
+ });
+ templateSelect.disabled=false;deleteTemplateBtn.disabled=false;
+ if(activeTemplateId&&templates.some(function(item){return item.id===activeTemplateId;}))templateSelect.value=activeTemplateId;
+}
+function uniqueTemplateName(fileName){
+ const base=(fileName||'แม่แบบใหม่').replace(/\.[^.]+$/,'').trim()||'แม่แบบใหม่';
+ let name=base,n=2;
+ while(templates.some(function(item){return item.name===name;})){name=base+' ('+n+')';n++;}
+ return name;
+}
 function loadTemplate(data){
  return new Promise(function(resolve,reject){
   const img=new Image();
   img.onload=function(){
    bg=img;templateReady=true;setCanvasSize(img.naturalWidth,img.naturalHeight);fitInitialLayout();
-   templateInput.hidden=true;changeBtn.hidden=false;
-   try{localStorage.setItem(KEY,data);document.getElementById('templateStatus').textContent='จำแม่แบบไว้ในเบราว์เซอร์นี้แล้ว';}
-   catch(e){document.getElementById('templateStatus').textContent='แม่แบบพร้อมใช้ในครั้งนี้ (บันทึกไว้ในเบราว์เซอร์ไม่ได้)';}
    render(true);resolve();
   };
   img.onerror=function(){reject(new Error('เปิดภาพแม่แบบไม่ได้ กรุณาเลือกภาพใหม่'));};
   img.src=data;
  });
 }
+function resetGeneratedCode(){
+ qrReady=false;qrSource=null;barcodeSource=null;layout.code='';saveBtn.disabled=true;
+}
+function activateTemplate(id){
+ const item=templates.find(function(t){return t.id===id;});
+ if(!item)return;
+ activeTemplateId=item.id;
+ try{localStorage.setItem(ACTIVE_KEY,item.id);}catch(e){}
+ refreshTemplateSelect();
+ resetGeneratedCode();
+ setStatus('กำลังเปิดแม่แบบ '+item.name+'…');
+ loadTemplate(item.data).then(function(){
+  templateStatus.textContent='กำลังใช้งาน: '+item.name+' · บันทึกไว้ในเบราว์เซอร์นี้';
+  setStatus('เลือกแม่แบบ '+item.name+' แล้ว กรอกรหัสและเลือกรูปแบบเพื่อสร้าง');
+ }).catch(function(e){
+  setStatus(e.message);
+  templateStatus.textContent='เปิดแม่แบบไม่สำเร็จ: '+item.name;
+ });
+}
 function handleFile(file){
  if(!file)return;
- if(!/^image\/(png|jpeg|webp)$/.test(file.type)){setStatus('รองรับไฟล์ PNG, JPG หรือ WEBP');return;}
- setStatus('กำลังโหลดภาพแม่แบบ…');
+ if(!/^image\/(png|jpeg|webp)$/.test(file.type)){setStatus('รองรับไฟล์ PNG, JPG หรือ WEBP');templateInput.value='';return;}
+ setStatus('กำลังบันทึกแม่แบบใหม่…');
  const reader=new FileReader();
- reader.onload=function(){loadTemplate(reader.result).then(function(){qrReady=false;qrSource=null;barcodeSource=null;saveBtn.disabled=true;setStatus('โหลดแม่แบบแล้ว กรอกรหัสแล้วเลือกรูปแบบเพื่อสร้าง');}).catch(function(e){setStatus(e.message);});};
- reader.onerror=function(){setStatus('อ่านไฟล์ภาพไม่สำเร็จ');};
+ reader.onload=function(){
+  const item={id:templateId(),name:uniqueTemplateName(file.name),data:reader.result};
+  templates.push(item);
+  if(!persistTemplates()){
+   templates.pop();
+   setStatus('บันทึกไม่สำเร็จ พื้นที่เก็บข้อมูลของเบราว์เซอร์อาจเต็ม ลองใช้ภาพที่มีขนาดเล็กลง');
+   templateInput.value='';return;
+  }
+  refreshTemplateSelect();
+  templateInput.value='';
+  activateTemplate(item.id);
+ };
+ reader.onerror=function(){setStatus('อ่านไฟล์ภาพไม่สำเร็จ');templateInput.value='';};
  reader.readAsDataURL(file);
 }
 templateInput.addEventListener('change',function(e){handleFile(e.target.files[0]);});
-changeBtn.addEventListener('click',function(){templateInput.hidden=false;templateInput.value='';templateInput.click();});
-const saved=localStorage.getItem(KEY);
-if(saved){loadTemplate(saved).then(function(){setStatus('โหลดแม่แบบที่บันทึกไว้แล้ว กรอกรหัสแล้วเลือกรูปแบบเพื่อสร้าง');}).catch(function(){localStorage.removeItem(KEY);setStatus('ภาพแม่แบบเดิมเปิดไม่ได้ กรุณาเลือกภาพใหม่');});}
+templateSelect.addEventListener('change',function(){if(templateSelect.value)activateTemplate(templateSelect.value);});
+deleteTemplateBtn.addEventListener('click',function(){
+ const item=templates.find(function(t){return t.id===activeTemplateId;});
+ if(!item)return;
+ if(!confirm('ต้องการลบแม่แบบ "'+item.name+'" ออกจากรายการที่บันทึกไว้ใช่ไหม?'))return;
+ const oldTemplates=templates.slice();
+ templates=templates.filter(function(t){return t.id!==item.id;});
+ if(!persistTemplates()){templates=oldTemplates;setStatus('ลบไม่สำเร็จ กรุณาลองอีกครั้ง');return;}
+ if(templates.length){
+  const next=templates[0];activeTemplateId=null;refreshTemplateSelect();activateTemplate(next.id);
+ }else{
+  activeTemplateId=null;
+  try{localStorage.removeItem(ACTIVE_KEY);}catch(e){}
+  refreshTemplateSelect();resetGeneratedCode();templateReady=false;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  sizeRange.disabled=true;textSizeRange.disabled=true;
+  templateStatus.textContent='ยังไม่มีแม่แบบที่บันทึกไว้ เพิ่มภาพแม่แบบใหม่ได้เลย';
+  setStatus('ลบแม่แบบแล้ว กรุณาเพิ่มหรือเลือกแม่แบบ');
+ }
+});
+
+// Load the multi-template library and migrate the previous single saved template.
+try{
+ const parsed=JSON.parse(localStorage.getItem(LIBRARY_KEY)||'[]');
+ if(Array.isArray(parsed))templates=parsed.filter(function(t){return t&&typeof t.id==='string'&&typeof t.name==='string'&&typeof t.data==='string';});
+}catch(e){templates=[];}
+const legacyData=localStorage.getItem(LEGACY_KEY);
+if(legacyData&&!templates.some(function(t){return t.data===legacyData;})){
+ const legacyItem={id:templateId(),name:uniqueTemplateName('แม่แบบเดิม'),data:legacyData};
+ templates.push(legacyItem);
+ if(persistTemplates()){
+  try{localStorage.removeItem(LEGACY_KEY);}catch(e){}
+ }else{
+  templates.pop();
+ }
+}
+refreshTemplateSelect();
+const savedActive=localStorage.getItem(ACTIVE_KEY);
+const firstTemplate=templates.find(function(t){return t.id===savedActive;})||templates[0];
+if(firstTemplate){
+ activeTemplateId=firstTemplate.id;
+ refreshTemplateSelect();
+ activateTemplate(firstTemplate.id);
+}else{
+ templateStatus.textContent='ยังไม่มีแม่แบบที่บันทึกไว้ เพิ่มภาพแม่แบบใหม่ได้เลย';
+ setStatus('เพิ่มภาพแม่แบบเพื่อเริ่มต้น');
+}
 function qrBox(){return {x:layout.x,y:layout.y,size:layout.size};}
 function groupBounds(){
  const rect=currentImageRect(),font=labelFontSize();
