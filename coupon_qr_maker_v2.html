@@ -105,14 +105,14 @@ function handleFile(file){
  if(!/^image\/(png|jpeg|webp)$/.test(file.type)){setStatus('รองรับไฟล์ PNG, JPG หรือ WEBP');return;}
  setStatus('กำลังโหลดภาพแม่แบบ…');
  const reader=new FileReader();
- reader.onload=function(){loadTemplate(reader.result).then(function(){qrReady=false;qrSource=null;saveBtn.disabled=true;setStatus('โหลดแม่แบบแล้ว กรอกเลขแล้วกดสร้าง QR');}).catch(function(e){setStatus(e.message);});};
+ reader.onload=function(){loadTemplate(reader.result).then(function(){qrReady=false;qrSource=null;saveBtn.disabled=true;setStatus('โหลดแม่แบบแล้ว กรอกรหัสแล้วเลือกรูปแบบเพื่อสร้าง');}).catch(function(e){setStatus(e.message);});};
  reader.onerror=function(){setStatus('อ่านไฟล์ภาพไม่สำเร็จ');};
  reader.readAsDataURL(file);
 }
 templateInput.addEventListener('change',function(e){handleFile(e.target.files[0]);});
 changeBtn.addEventListener('click',function(){templateInput.hidden=false;templateInput.value='';templateInput.click();});
 const saved=localStorage.getItem(KEY);
-if(saved){loadTemplate(saved).then(function(){setStatus('โหลดแม่แบบที่บันทึกไว้แล้ว กรอกเลขแล้วกดสร้าง QR');}).catch(function(){localStorage.removeItem(KEY);setStatus('ภาพแม่แบบเดิมเปิดไม่ได้ กรุณาเลือกภาพใหม่');});}
+if(saved){loadTemplate(saved).then(function(){setStatus('โหลดแม่แบบที่บันทึกไว้แล้ว กรอกรหัสแล้วเลือกรูปแบบเพื่อสร้าง');}).catch(function(){localStorage.removeItem(KEY);setStatus('ภาพแม่แบบเดิมเปิดไม่ได้ กรุณาเลือกภาพใหม่');});}
 function qrBox(){return {x:layout.x,y:layout.y,size:layout.size};}
 function groupBounds(){
  const rect=currentImageRect(),font=labelFontSize();
