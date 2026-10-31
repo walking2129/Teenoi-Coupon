@@ -27,9 +27,12 @@ input[type=file]{font-size:14px;padding:8px}input[type=range]{padding:0;accent-c
 <p>เลือกสร้างได้ทีละแบบ: QR Code หรือบาร์โค้ด Code 128 ใส่รหัสแล้วสร้างเฉพาะรูปแบบที่เลือก จากนั้นลากย้ายและปรับขนาดได้</p>
 <label for="templateSelect">เลือกแม่แบบที่บันทึกไว้</label>
 <div class="template-row"><select id="templateSelect" disabled><option value="">ยังไม่มีแม่แบบ</option></select><button id="deleteTemplate" class="btn secondary" type="button" disabled>ลบแม่แบบ</button></div>
-<label for="templateFile">เพิ่มแม่แบบใหม่</label>
+<label for="templateName">ตั้งชื่อแม่แบบ (ใส่ตัวเลข)</label>
+<input id="templateName" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="เช่น 01, 02, 1001">
+<label for="templateFile">เลือกภาพแม่แบบใหม่</label>
 <input id="templateFile" type="file" accept="image/png,image/jpeg,image/webp">
-<div id="templateStatus" class="small">เพิ่มภาพแม่แบบใหม่ได้หลายภาพ และสลับเลือกใช้ได้ภายหลัง</div>
+<button id="saveTemplate" class="btn primary" type="button" disabled>บันทึกแม่แบบ</button>
+<div id="templateStatus" class="small">ตั้งหมายเลข เลือกภาพ แล้วกดบันทึก แม่แบบเดิมจะไม่ถูกเขียนทับ</div>
 <label for="codeType">เลือกรูปแบบ</label>
 <select id="codeType"><option value="qr">QR Code</option><option value="barcode">บาร์โค้ด (Code 128)</option></select>
 <label for="codeInput">รหัสคูปอง / ข้อความ</label>
@@ -57,13 +60,14 @@ const ACTIVE_KEY='coupon_qr_maker_v2_active_template';
 const canvas=document.getElementById('preview'),ctx=canvas.getContext('2d');
 const statusEl=document.getElementById('status'),saveBtn=document.getElementById('saveBtn');
 const templateInput=document.getElementById('templateFile'),templateSelect=document.getElementById('templateSelect');
+const templateNameInput=document.getElementById('templateName'),saveTemplateBtn=document.getElementById('saveTemplate');
 const deleteTemplateBtn=document.getElementById('deleteTemplate'),templateStatus=document.getElementById('templateStatus');
 const sizeRange=document.getElementById('sizeRange'),sizeValue=document.getElementById('sizeValue'),codeInput=document.getElementById('codeInput');
 const textSizeRange=document.getElementById('textSizeRange'),textSizeValue=document.getElementById('textSizeValue'),textSizeLabel=document.getElementById('textSizeLabel');
 const codeTypeInput=document.getElementById('codeType'),sizeLabel=document.getElementById('sizeLabel'),makeBtn=document.getElementById('makeBtn');
 const qrstage=document.getElementById('qrstage');
 let bg=new Image(),qrSource=null,barcodeSource=null,qrReady=false,templateReady=false,dragging=false,dragStart=null;
-let templates=[],activeTemplateId=null;
+let templates=[],activeTemplateId=null,pendingTemplateFile=null;
 let layout={x:0,y:0,size:410,textSize:63,code:''};
 function setStatus(s){statusEl.textContent=s;}
 function setCanvasSize(w,h){canvas.width=w;canvas.height=h;canvas.style.aspectRatio=w+'/'+h;}
@@ -157,27 +161,46 @@ function activateTemplate(id){
   templateStatus.textContent='เปิดแม่แบบไม่สำเร็จ: '+item.name;
  });
 }
+function updateTemplateSaveButton(){
+ const name=templateNameInput.value.trim();
+ saveTemplateBtn.disabled=!(pendingTemplateFile&&/^[0-9]+$/.test(name));
+}
+templateNameInput.addEventListener('input',updateTemplateSaveButton);
+templateInput.addEventListener('change',function(e){
+ pendingTemplateFile=e.target.files&&e.target.files[0]?e.target.files[0]:null;
+ if(pendingTemplateFile)templateStatus.textContent='เลือกไฟล์แล้ว: '+pendingTemplateFile.name+' · ใส่หมายเลขแล้วกดบันทึก';
+ updateTemplateSaveButton();
+});
 function handleFile(file){
  if(!file)return;
- if(!/^image\/(png|jpeg|webp)$/.test(file.type)){setStatus('รองรับไฟล์ PNG, JPG หรือ WEBP');templateInput.value='';return;}
- setStatus('กำลังบันทึกแม่แบบใหม่…');
+ if(!/^image\/(png|jpeg|webp)$/.test(file.type)){setStatus('รองรับไฟล์ PNG, JPG หรือ WEBP');return;}
+ const name=templateNameInput.value.trim();
+ if(!/^[0-9]+$/.test(name)){setStatus('กรุณาตั้งชื่อแม่แบบเป็นตัวเลข เช่น 01 หรือ 1001');templateNameInput.focus();return;}
+ if(templates.some(function(item){return item.name===name;})){
+  setStatus('มีแม่แบบหมายเลข '+name+' อยู่แล้ว กรุณาใช้หมายเลขอื่น');
+  templateNameInput.focus();return;
+ }
+ setStatus('กำลังบันทึกแม่แบบหมายเลข '+name+'…');
  const reader=new FileReader();
  reader.onload=function(){
-  const item={id:templateId(),name:uniqueTemplateName(file.name),data:reader.result};
+  const item={id:templateId(),name:name,data:reader.result};
   templates.push(item);
   if(!persistTemplates()){
    templates.pop();
    setStatus('บันทึกไม่สำเร็จ พื้นที่เก็บข้อมูลของเบราว์เซอร์อาจเต็ม ลองใช้ภาพที่มีขนาดเล็กลง');
-   templateInput.value='';return;
+   return;
   }
   refreshTemplateSelect();
+  templateNameInput.value='';
   templateInput.value='';
+  pendingTemplateFile=null;
+  updateTemplateSaveButton();
   activateTemplate(item.id);
  };
- reader.onerror=function(){setStatus('อ่านไฟล์ภาพไม่สำเร็จ');templateInput.value='';};
+ reader.onerror=function(){setStatus('อ่านไฟล์ภาพไม่สำเร็จ กรุณาลองเลือกไฟล์อีกครั้ง');};
  reader.readAsDataURL(file);
 }
-templateInput.addEventListener('change',function(e){handleFile(e.target.files[0]);});
+saveTemplateBtn.addEventListener('click',function(){handleFile(pendingTemplateFile);});
 templateSelect.addEventListener('change',function(){if(templateSelect.value)activateTemplate(templateSelect.value);});
 deleteTemplateBtn.addEventListener('click',function(){
  const item=templates.find(function(t){return t.id===activeTemplateId;});
