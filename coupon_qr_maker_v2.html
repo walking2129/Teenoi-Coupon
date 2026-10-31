@@ -30,7 +30,7 @@ input[type=file]{font-size:14px;padding:8px}input[type=range]{padding:0;accent-c
 <select id="codeType"><option value="qr">QR Code</option><option value="barcode">บาร์โค้ด (Code 128)</option></select>
 <label for="codeInput">รหัสคูปอง / ข้อความ</label>
 <input id="codeInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" placeholder="กรอกรหัสหรือข้อความ ทั้งตัวอักษรและตัวเลข">
-<div class="note">ระบบจะนำข้อความนี้ไปสร้างตามรูปแบบที่เลือก และพิมพ์รหัสกำกับใต้ภาพให้อัตโนมัติ บาร์โค้ด Code 128 รองรับภาษาอังกฤษ ตัวเลข และสัญลักษณ์ทั่วไป ไม่รองรับภาษาไทย</div>
+<div class="note">QR Code รองรับภาษาไทยและอีโมจิ โดยเข้ารหัส UTF-8 ส่วนบาร์โค้ด Code 128 รองรับภาษาอังกฤษ ตัวเลข และสัญลักษณ์ทั่วไป ไม่รองรับภาษาไทย ข้อความใต้โค้ดปรับขนาดแยกได้</div>
 <label for="sizeRange" id="sizeLabel">ขนาด QR</label>
 <div class="range-row"><input id="sizeRange" type="range" min="100" max="1000" step="5" value="410" disabled><span id="sizeValue" class="range-value">—</span></div>
 <label for="textSizeRange" id="textSizeLabel">ขนาดข้อความใต้ QR</label>
