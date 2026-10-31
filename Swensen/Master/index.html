@@ -234,26 +234,49 @@ html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#f3f3
           }
         }
       }
-      /* First-page only: erase faint status icons by vertical pixel reconstruction.
-         Sampling the same x-column above/below preserves the vertical red awning ribs. */
+      /* First-page only: remove the Wi-Fi/wave and battery marks by rebuilding
+         the lower awning from the clean right-hand rib pattern. The donor strip is
+         mirrored and repeated so the vertical ribs and horizontal rail stay balanced. */
       if(img===document.querySelector(".header-shell .header")){
-        const iconLeft=Math.floor(w*0.748), iconRight=Math.floor(w*0.833);
-        const iconTop=Math.floor(h*0.105), iconBottom=Math.floor(h*0.205);
-        const base=new Uint8ClampedArray(restored);
-        for(let x=iconLeft;x<iconRight;x++){
-          let y=iconTop;
-          while(y<iconBottom){
-            const p=(y*w+x)*4;
-            const up=iconTop-1, down=iconBottom;
-            const a=(up*w+x)*4, b=(down*w+x)*4;
-            const span=down-up;
-            const t=(y-up)/span;
-            restored[p]=base[a]*(1-t)+base[b]*t;
-            restored[p+1]=base[a+1]*(1-t)+base[b+1]*t;
-            restored[p+2]=base[a+2]*(1-t)+base[b+2]*t;
-            y++;
+        const targetLeft=Math.floor(w*0.706);
+        const targetRight=Math.floor(w*0.898);
+        const targetTop=Math.floor(h*0.168);
+        const targetBottom=Math.floor(h*0.376);
+        const donorWidth=w-targetRight;
+        const targetWidth=targetRight-targetLeft;
+        const source=new Uint8ClampedArray(restored);
+        const rebuilt=new Uint8ClampedArray(restored);
+
+        for(let y=targetTop;y<targetBottom;y++){
+          for(let dx=0;dx<targetWidth;dx++){
+            const tile=dx%(donorWidth*2);
+            const offset=tile<donorWidth ? donorWidth-1-tile : tile-donorWidth;
+            const sx=targetRight+offset;
+            const from=(y*w+sx)*4;
+            const to=(y*w+targetLeft+dx)*4;
+            rebuilt[to]=source[from];
+            rebuilt[to+1]=source[from+1];
+            rebuilt[to+2]=source[from+2];
+            rebuilt[to+3]=source[from+3];
           }
         }
+
+        /* Softly blend the repaired patch edges into the untouched original pixels. */
+        const edgeX=Math.min(5,Math.floor(targetWidth/10));
+        const edgeY=Math.min(4,Math.floor((targetBottom-targetTop)/10));
+        for(let y=targetTop;y<targetBottom;y++){
+          for(let dx=0;dx<targetWidth;dx++){
+            let alpha=1;
+            if(dx<edgeX) alpha=Math.min(alpha,(dx+1)/(edgeX+1));
+            if(dx>=targetWidth-edgeX) alpha=Math.min(alpha,(targetWidth-dx)/(edgeX+1));
+            if(y<targetTop+edgeY) alpha=Math.min(alpha,(y-targetTop+1)/(edgeY+1));
+            if(y>=targetBottom-edgeY) alpha=Math.min(alpha,(targetBottom-y)/(edgeY+1));
+            if(alpha>=1) continue;
+            const p=(y*w+targetLeft+dx)*4;
+            for(let c=0;c<3;c++) rebuilt[p+c]=source[p+c]*(1-alpha)+rebuilt[p+c]*alpha;
+          }
+        }
+        restored.set(rebuilt);
       }
       image.data.set(restored);
       ctx.putImageData(image,0,0);
