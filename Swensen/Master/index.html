@@ -295,7 +295,6 @@ html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#f3f3
             while(y<iy1&&expandedIcons[y*w+x]) y++;
             const last=y-1;
             let up=first-1,down=last+1;
-            while(up>=iy0&&!expandedIcons[up*w+x]) break;
             while(up>=iy0&&expandedIcons[up*w+x]) up--;
             while(down<iy1&&expandedIcons[down*w+x]) down++;
             if(up>=iy0&&down<iy1){
