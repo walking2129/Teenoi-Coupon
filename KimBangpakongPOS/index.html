@@ -41,7 +41,7 @@ const DEFAULT_PRODUCTS=[
 {id:8,name:'ขนมขบเคี้ยว',barcode:'8854444555566',price:10,stock:60,category:'ขนม'}
 ];
 const STORE={name:'คิม บางปะกง',address:'88/121-122 หมู่ 19 ซอย 4 บางปะกงพรหมเทพรังสรรค์ ถนนบางนา-ตราด ตำบลบางปะกง อำเภอบางปะกง จังหวัดฉะเชิงเทรา 24130',phone:'094-567-4577'};
-let products=load('kim_pos_products',DEFAULT_PRODUCTS),sales=load('kim_pos_sales',[]),cart=[],category='ทั้งหมด',editingId=null,scannerStream=null,scanActive=false,lastCode='',lastScanAt=0;
+let products=load('kim_pos_products',DEFAULT_PRODUCTS),sales=load('kim_pos_sales',[]),cart=[],category='ทั้งหมด',editingId=null,scannerStream=null,scannerControls=null,scannerReader=null,scanActive=false,lastCode='',lastScanAt=0,scanLastSeen=0;
 function load(k,d){try{let x=localStorage.getItem(k);return x?JSON.parse(x):JSON.parse(JSON.stringify(d))}catch(e){return JSON.parse(JSON.stringify(d))}}
 function save(){localStorage.setItem('kim_pos_products',JSON.stringify(products));localStorage.setItem('kim_pos_sales',JSON.stringify(sales))}
 function money(n){return new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB'}).format(Number(n)||0)}
@@ -73,8 +73,82 @@ function printReceipt(id){let s=sales.find(x=>x.id===id);if(!s)return;document.g
 function renderHistory(){document.getElementById('historyRows').innerHTML=sales.map(s=>`<tr><td><b>${s.id}</b></td><td>${new Date(s.date).toLocaleString('th-TH')}</td><td>${escapeHtml(s.customerName||'ลูกค้าทั่วไป')}</td><td>${s.items.reduce((a,x)=>a+x.qty,0)} ชิ้น</td><td><b>${money(s.total)}</b></td><td>${escapeHtml(s.method)}</td><td><button class="btn btn-light" style="padding:6px 9px" onclick="showReceipt(sales.find(x=>x.id==='${s.id}'))">ดูบิล</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty-table">ยังไม่มีประวัติการขาย</td></tr>'}
 function openSettings(){openModal('ข้อมูลร้านค้า',`<div class="field"><label>ชื่อร้าน</label><input value="${STORE.name}" disabled></div><div class="field"><label>ที่อยู่</label><input value="${STORE.address}" disabled></div><div class="field"><label>โทรศัพท์</label><input value="${STORE.phone}" disabled></div><div class="note">ข้อมูลร้านในรุ่นทดลองนี้ตั้งค่าตามข้อมูลที่ให้มาแล้ว หากต้องการเปลี่ยนแปลงจะเพิ่มหน้าตั้งค่าแก้ไขในรุ่นถัดไป</div><div style="display:flex;justify-content:center;margin:14px 0"><img src="data:image/jpeg;base64,${QR_DATA}" style="width:170px;height:170px;object-fit:contain" alt="LINE QR"></div><div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">เรียบร้อย</button></div>`)}
 function openScanner(){openModal('สแกนบาร์โค้ดสินค้า',`<div class="scanner"><video id="scanVideo" autoplay muted playsinline></video><div class="scan-frame"></div></div><p class="note" id="scanStatus" style="margin-top:10px">กดเปิดกล้องเพื่อสแกนบาร์โค้ด หรือพิมพ์รหัสด้านล่าง</p><div class="field" style="margin-top:12px"><label>รหัสบาร์โค้ด</label><input id="manualBarcode" placeholder="กรอกรหัสสินค้าแล้วกดเพิ่ม" onkeydown="if(event.key==='Enter')lookupBarcode()"></div><div class="modal-actions" style="justify-content:space-between"><button class="btn btn-dark" onclick="startScanner()">เปิดกล้อง</button><div><button class="btn btn-light" onclick="closeModal()">ปิด</button> <button class="btn btn-primary" onclick="lookupBarcode()">ค้นหาสินค้า</button></div></div>`)}
-async function startScanner(){let status=document.getElementById('scanStatus'),video=document.getElementById('scanVideo');if(!navigator.mediaDevices?.getUserMedia){status.textContent='เบราว์เซอร์นี้ไม่รองรับการเปิดกล้อง กรุณาพิมพ์บาร์โค้ดแทน';return}if(!('BarcodeDetector'in window)){status.textContent='อุปกรณ์หรือเบราว์เซอร์นี้ยังไม่รองรับการอ่านบาร์โค้ดผ่านกล้องในตัว กรุณาพิมพ์รหัสแทน';return}try{let detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39']});scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});video.srcObject=scannerStream;await video.play();scanActive=true;status.textContent='กำลังสแกน... วางบาร์โค้ดให้อยู่ในกรอบ';let tick=async()=>{if(!scanActive||!video||video.readyState<2)return;if(Date.now()-lastScanAt>1100){try{let codes=await detector.detect(video);if(codes.length){let raw=codes[0].rawValue;if(raw&&raw!==lastCode){lastCode=raw;lastScanAt=Date.now();document.getElementById('manualBarcode').value=raw;lookupBarcode();return}}}catch(e){}}if(scanActive)requestAnimationFrame(tick)};requestAnimationFrame(tick)}catch(e){status.textContent='เปิดกล้องไม่สำเร็จ: กรุณาอนุญาตใช้กล้องและเปิดเว็บผ่าน HTTPS หรือพิมพ์รหัสแทน'}}
-function stopScanner(){scanActive=false;if(scannerStream){scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null}}
+async function loadZXing(){
+ if(window.ZXingBrowser&&window.ZXingBrowser.BrowserMultiFormatReader)return;
+ if(!window._zxingLoadPromise){
+  window._zxingLoadPromise=(async()=>{
+   const urls=[
+    'https://cdn.jsdelivr.net/npm/@zxing/browser@0.2.1/umd/zxing-browser.min.js',
+    'https://unpkg.com/@zxing/browser@0.2.1/umd/zxing-browser.min.js'
+   ];
+   let lastError;
+   for(const url of urls){
+    try{
+     await new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src=url;script.async=true;
+      script.onload=()=>resolve();
+      script.onerror=()=>{script.remove();reject(new Error('ดาวน์โหลดตัวอ่านบาร์โค้ดไม่สำเร็จ'));};
+      document.head.appendChild(script);
+     });
+     if(window.ZXingBrowser&&window.ZXingBrowser.BrowserMultiFormatReader)return;
+    }catch(e){lastError=e;}
+   }
+   throw lastError||new Error('ไม่พบไลบรารีอ่านบาร์โค้ด');
+  })().catch(e=>{window._zxingLoadPromise=null;throw e;});
+ }
+ return window._zxingLoadPromise;
+}
+async function startScanner(){
+ const status=document.getElementById('scanStatus');
+ const video=document.getElementById('scanVideo');
+ if(!status||!video)return;
+ if(!window.isSecureContext){status.textContent='ต้องเปิดเว็บไซต์ผ่าน HTTPS จึงจะใช้กล้องได้';return;}
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){status.textContent='เบราว์เซอร์นี้ไม่อนุญาตให้เว็บไซต์เรียกกล้อง กรุณาเปิดลิงก์นี้ใน Chrome หรือ Samsung Internet';return;}
+ try{
+  status.textContent='กำลังเตรียมระบบอ่านบาร์โค้ด...';
+  await loadZXing();
+  stopScanner();
+  scannerReader=new window.ZXingBrowser.BrowserMultiFormatReader();
+  scanActive=true;lastCode='';lastScanAt=0;scanLastSeen=0;
+  status.textContent='กำลังขออนุญาตใช้กล้อง...';
+  scannerControls=await scannerReader.decodeFromConstraints(
+   {audio:false,video:{facingMode:{ideal:'environment'}}},
+   video,
+   (result,error)=>{
+    if(!scanActive)return;
+    if(result){
+     const raw=typeof result.getText==='function'?result.getText():(result.text||'');
+     const now=Date.now();scanLastSeen=now;
+     if(raw&&raw!==lastCode){
+      lastCode=raw;lastScanAt=now;
+      const input=document.getElementById('manualBarcode');
+      if(input){input.value=raw;lookupBarcode();}
+     }
+    }else if(Date.now()-scanLastSeen>700){
+     lastCode='';
+    }
+   }
+  );
+  status.textContent='กล้องพร้อมใช้งาน เล็งบาร์โค้ดให้อยู่ในกรอบ';
+ }catch(e){
+  scanActive=false;
+  const name=e&&e.name?e.name:'';
+  let msg='เปิดกล้องไม่สำเร็จ';
+  if(name==='NotAllowedError'||name==='PermissionDeniedError')msg='ไม่ได้รับอนุญาตใช้กล้อง กรุณาเปิดสิทธิ์ Camera ให้เว็บไซต์นี้ หรือเปิดใน Chrome';
+  else if(name==='NotFoundError'||name==='DevicesNotFoundError')msg='ไม่พบกล้องในอุปกรณ์';
+  else if(name==='NotReadableError'||name==='TrackStartError')msg='กล้องกำลังถูกใช้งานโดยแอปอื่น กรุณาปิดแอปกล้องหรือแอปสแกนอื่น';
+  else if(name==='OverconstrainedError')msg='ไม่พบกล้องหลัง ลองอนุญาตกล้องหรือใช้กล้องหน้า';
+  else if(String(e&&e.message||'').includes('ดาวน์โหลด')||String(e&&e.message||'').includes('ไลบรารี'))msg='โหลดระบบอ่านบาร์โค้ดไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง';
+  status.textContent=msg+(name?' ('+name+')':'');
+ }
+}
+function stopScanner(){
+ scanActive=false;
+ if(scannerControls){try{scannerControls.stop()}catch(e){}scannerControls=null;}
+ if(scannerStream){scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null;}
+ scannerReader=null;
+}
 function lookupBarcode(){let code=document.getElementById('manualBarcode')?.value.trim();if(!code)return toast('กรุณากรอกรหัสบาร์โค้ด');let p=products.find(x=>String(x.barcode)===code);if(p){addToCart(p.id);toast('เพิ่ม '+p.name+' แล้ว')}else{closeModal();openModal('ไม่พบรหัสบาร์โค้ด',`<p>ไม่พบสินค้าเลขรหัส <b>${escapeHtml(code)}</b> ในระบบ</p><p class="note">สามารถเพิ่มรหัสนี้เป็นสินค้าใหม่ได้</p><div class="modal-actions"><button class="btn btn-light" onclick="closeModal()">ยกเลิก</button><button class="btn btn-primary" onclick="closeModal();openAddProductWithCode('${escapeHtml(code)}')">เพิ่มสินค้าใหม่</button></div>`)} }
 function openAddProductWithCode(code){openAddProduct();document.getElementById('fBarcode').value=code}
 function exportData(){let data={store:STORE,products,sales,exportedAt:new Date().toISOString()};let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='kim-bangpakong-pos-backup.json';a.click();URL.revokeObjectURL(url);toast('ส่งออกข้อมูลสำรองแล้ว')}
