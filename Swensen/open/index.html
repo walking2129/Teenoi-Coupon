@@ -55,7 +55,7 @@ function svgToImage(svg){
  });
 }
 async function openCoupon(){
- const response=await fetch(BASE+'Swensen/Master/index.html?template=17');
+ const response=await fetch(BASE+'Swensen/Master/index.html?template=18');
  if(!response.ok)throw new Error('โหลดแม่แบบ Swensen ไม่สำเร็จ ('+response.status+')');
  const parsed=new DOMParser().parseFromString(await response.text(),'text/html');
  const codeEl=parsed.getElementById('code'),barcode=parsed.getElementById('barcode');
