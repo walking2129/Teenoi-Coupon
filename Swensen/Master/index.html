@@ -234,79 +234,26 @@ html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#f3f3
           }
         }
       }
-      /* Remove faint phone status symbols only from the first-page header.
-         Detect small dark marks against the same-column red awning texture. */
+      /* First-page only: erase faint status icons by vertical pixel reconstruction.
+         Sampling the same x-column above/below preserves the vertical red awning ribs. */
       if(img===document.querySelector(".header-shell .header")){
-        const ix0=Math.floor(w*0.72), ix1=Math.floor(w*0.96);
-        const iy0=Math.floor(h*0.105), iy1=Math.floor(h*0.225);
-        const iconBase=new Uint8ClampedArray(restored), iconResult=new Uint8ClampedArray(restored);
-        const raw=new Uint8Array(w*h);
-        for(let y=iy0+5;y<iy1-5;y++){
-          for(let x=ix0;x<ix1;x++){
-            const p=(y*w+x)*4, a=((y-5)*w+x)*4, b=((y+5)*w+x)*4;
-            const er=(iconBase[a]+iconBase[b])*0.5, eg=(iconBase[a+1]+iconBase[b+1])*0.5, eb=(iconBase[a+2]+iconBase[b+2])*0.5;
-            if(er-iconBase[p]>18 && eg-iconBase[p+1]>11 && eb-iconBase[p+2]>9) raw[y*w+x]=1;
+        const iconLeft=Math.floor(w*0.748), iconRight=Math.floor(w*0.833);
+        const iconTop=Math.floor(h*0.105), iconBottom=Math.floor(h*0.205);
+        const base=new Uint8ClampedArray(restored);
+        for(let x=iconLeft;x<iconRight;x++){
+          let y=iconTop;
+          while(y<iconBottom){
+            const p=(y*w+x)*4;
+            const up=iconTop-1, down=iconBottom;
+            const a=(up*w+x)*4, b=(down*w+x)*4;
+            const span=down-up;
+            const t=(y-up)/span;
+            restored[p]=base[a]*(1-t)+base[b]*t;
+            restored[p+1]=base[a+1]*(1-t)+base[b+1]*t;
+            restored[p+2]=base[a+2]*(1-t)+base[b+2]*t;
+            y++;
           }
         }
-        /* Ignore horizontal seams/shadows: they span much of the whole region. */
-        for(let y=iy0;y<iy1;y++){
-          let count=0;
-          for(let x=ix0;x<ix1;x++) count+=raw[y*w+x];
-          if(count>(ix1-ix0)*0.24) for(let x=ix0;x<ix1;x++) raw[y*w+x]=0;
-        }
-        /* Keep only compact components consistent with status glyphs. */
-        const seen=new Uint8Array(w*h), cleanMask=new Uint8Array(w*h);
-        const neighbors=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
-        for(let y=iy0;y<iy1;y++){
-          for(let x=ix0;x<ix1;x++){
-            const seed=y*w+x;
-            if(!raw[seed]||seen[seed]) continue;
-            const stack=[seed], component=[];
-            seen[seed]=1;
-            let minX=x,maxX=x,minY=y,maxY=y;
-            while(stack.length){
-              const idx=stack.pop(), cy=Math.floor(idx/w), cx=idx-cy*w;
-              component.push(idx); minX=Math.min(minX,cx); maxX=Math.max(maxX,cx);
-              minY=Math.min(minY,cy); maxY=Math.max(maxY,cy);
-              for(const [dx,dy] of neighbors){
-                const nx=cx+dx, ny=cy+dy;
-                if(nx<ix0||nx>=ix1||ny<iy0||ny>=iy1) continue;
-                const ni=ny*w+nx;
-                if(raw[ni]&&!seen[ni]){seen[ni]=1;stack.push(ni);}
-              }
-            }
-            const cw=maxX-minX+1,ch=maxY-minY+1;
-            if(component.length>=3 && component.length<=900 && cw<=90 && ch<=55){
-              for(const idx of component) cleanMask[idx]=1;
-            }
-          }
-        }
-        /* Expand slightly, then rebuild each damaged vertical run from nearby pixels. */
-        const expandedIcons=new Uint8Array(cleanMask);
-        for(let y=iy0+1;y<iy1-1;y++) for(let x=ix0+1;x<ix1-1;x++){
-          const i=y*w+x;
-          if(cleanMask[i]||cleanMask[i-1]||cleanMask[i+1]||cleanMask[i-w]||cleanMask[i+w]) expandedIcons[i]=1;
-        }
-        for(let x=ix0;x<ix1;x++){
-          let y=iy0;
-          while(y<iy1){
-            if(!expandedIcons[y*w+x]){y++;continue;}
-            const first=y;
-            while(y<iy1&&expandedIcons[y*w+x]) y++;
-            const last=y-1;
-            let up=first-1,down=last+1;
-            while(up>=iy0&&expandedIcons[up*w+x]) up--;
-            while(down<iy1&&expandedIcons[down*w+x]) down++;
-            if(up>=iy0&&down<iy1){
-              const span=down-up;
-              for(let yy=first;yy<=last;yy++){
-                const t=(yy-up)/span,a=(up*w+x)*4,b=(down*w+x)*4,q=(yy*w+x)*4;
-                for(let c=0;c<3;c++) iconResult[q+c]=iconBase[a+c]*(1-t)+iconBase[b+c]*t;
-              }
-            }
-          }
-        }
-        restored.set(iconResult);
       }
       image.data.set(restored);
       ctx.putImageData(image,0,0);
