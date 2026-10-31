@@ -208,10 +208,11 @@ const legacyData=localStorage.getItem(LEGACY_KEY);
 if(legacyData&&!templates.some(function(t){return t.data===legacyData;})){
  const legacyItem={id:templateId(),name:uniqueTemplateName('แม่แบบเดิม'),data:legacyData};
  templates.push(legacyItem);
- if(persistTemplates()){
-  try{localStorage.removeItem(LEGACY_KEY);}catch(e){}
- }else{
+ // Free the old single-template slot before migrating to the multi-template list.
+ try{localStorage.removeItem(LEGACY_KEY);}catch(e){}
+ if(!persistTemplates()){
   templates.pop();
+  try{localStorage.setItem(LEGACY_KEY,legacyData);}catch(e){}
  }
 }
 refreshTemplateSelect();
