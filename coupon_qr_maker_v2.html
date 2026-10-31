@@ -33,6 +33,8 @@ input[type=file]{font-size:14px;padding:8px}input[type=range]{padding:0;accent-c
 <div class="note">ระบบจะนำข้อความนี้ไปสร้างตามรูปแบบที่เลือก และพิมพ์รหัสกำกับใต้ภาพให้อัตโนมัติ บาร์โค้ด Code 128 รองรับภาษาอังกฤษ ตัวเลข และสัญลักษณ์ทั่วไป ไม่รองรับภาษาไทย</div>
 <label for="sizeRange" id="sizeLabel">ขนาด QR</label>
 <div class="range-row"><input id="sizeRange" type="range" min="100" max="1000" step="5" value="410" disabled><span id="sizeValue" class="range-value">—</span></div>
+<label for="textSizeRange" id="textSizeLabel">ขนาดข้อความใต้ QR</label>
+<div class="range-row"><input id="textSizeRange" type="range" min="10" max="180" step="1" value="63" disabled><span id="textSizeValue" class="range-value">—</span></div>
 <button class="btn primary" id="makeBtn" type="button">สร้าง QR Code</button>
 <button class="btn secondary" id="saveBtn" type="button" disabled>ดาวน์โหลดภาพ PNG</button>
 <div id="status" class="status">รอเลือกภาพแม่แบบ</div>
@@ -40,7 +42,7 @@ input[type=file]{font-size:14px;padding:8px}input[type=range]{padding:0;accent-c
 <section class="panel"><h2>จัดตำแหน่งภาพ</h2><p class="small">หลังสร้างโค้ด ให้ลากภาพโค้ดหรือข้อความกำกับเพื่อย้ายทั้งชุด</p><canvas id="preview" class="preview" width="709" height="1536" aria-label="ลากเพื่อย้ายโค้ดและข้อความกำกับ"></canvas><p class="small">กรอบเส้นประมีไว้ช่วยจัดตำแหน่งเท่านั้น จะไม่ติดไปกับไฟล์ PNG ที่ดาวน์โหลด</p></section>
 <div id="qrstage" class="hidden"></div>
 </main>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script>
 (function(){
@@ -50,10 +52,11 @@ const canvas=document.getElementById('preview'),ctx=canvas.getContext('2d');
 const statusEl=document.getElementById('status'),saveBtn=document.getElementById('saveBtn');
 const templateInput=document.getElementById('templateFile'),changeBtn=document.getElementById('changeTemplate');
 const sizeRange=document.getElementById('sizeRange'),sizeValue=document.getElementById('sizeValue'),codeInput=document.getElementById('codeInput');
+const textSizeRange=document.getElementById('textSizeRange'),textSizeValue=document.getElementById('textSizeValue'),textSizeLabel=document.getElementById('textSizeLabel');
 const codeTypeInput=document.getElementById('codeType'),sizeLabel=document.getElementById('sizeLabel'),makeBtn=document.getElementById('makeBtn');
 const qrstage=document.getElementById('qrstage');
 let bg=new Image(),qrSource=null,barcodeSource=null,qrReady=false,templateReady=false,dragging=false,dragStart=null;
-let layout={x:0,y:0,size:410,code:''};
+let layout={x:0,y:0,size:410,textSize:63,code:''};
 function setStatus(s){statusEl.textContent=s;}
 function setCanvasSize(w,h){canvas.width=w;canvas.height=h;canvas.style.aspectRatio=w+'/'+h;}
 function isBarcode(){return codeTypeInput.value==='barcode';}
@@ -63,8 +66,8 @@ function currentImageRect(){
  const ratio=barcodeSource?barcodeSource.height/barcodeSource.width:0.23;
  return {x:layout.x,y:layout.y,w:w,h:w*ratio};
 }
-function labelFontSize(){return isBarcode()?Math.max(16,Math.round(layout.size*0.065)):Math.max(18,Math.round(layout.size*0.155));}
-function labelBaseline(rect){const f=labelFontSize();return rect.y+rect.h+(isBarcode()?f*1.35:layout.size*0.10);}
+function labelFontSize(){return layout.textSize;}
+function labelBaseline(rect){const f=labelFontSize();return rect.y+rect.h+(isBarcode()?f*1.35:Math.max(8,f*0.65));}
 function maxLayoutY(){
  const rect=currentImageRect(),f=labelFontSize();
  return Math.max(0,canvas.height-rect.h-f*1.8-10);
@@ -72,6 +75,7 @@ function maxLayoutY(){
 function updateModeLabels(){
  const barcode=isBarcode();
  sizeLabel.textContent=barcode?'ความกว้างบาร์โค้ด':'ขนาด QR';
+ textSizeLabel.textContent=barcode?'ขนาดข้อความใต้บาร์โค้ด':'ขนาดข้อความใต้ QR';
  makeBtn.textContent=barcode?'สร้างบาร์โค้ด Code 128':'สร้าง QR Code';
 }
 function fitInitialLayout(){
@@ -82,6 +86,10 @@ function fitInitialLayout(){
  sizeRange.min=String(min);sizeRange.max=String(max);
  layout.size=isBarcode()?Math.floor(canvas.width*0.82):Math.min(Math.floor(canvas.width*0.58),Math.floor(Math.min(canvas.width,canvas.height)*0.82));
  if(layout.size<min)layout.size=min;
+ layout.textSize=isBarcode()?Math.max(16,Math.round(layout.size*0.065)):Math.max(18,Math.round(layout.size*0.155));
+ textSizeRange.disabled=false;textSizeRange.min='10';textSizeRange.max=String(Math.max(80,Math.min(180,Math.floor(canvas.width*0.25))));
+ textSizeRange.value=String(Math.min(Number(textSizeRange.max),layout.textSize));
+ layout.textSize=Number(textSizeRange.value);textSizeValue.textContent=layout.textSize+' px';
  layout.x=Math.max(0,(canvas.width-layout.size)/2);
  layout.y=Math.max(0,Math.min(Math.floor(canvas.height*0.29),maxLayoutY()));
  sizeRange.value=String(layout.size);sizeValue.textContent=layout.size+' px';
@@ -105,7 +113,7 @@ function handleFile(file){
  if(!/^image\/(png|jpeg|webp)$/.test(file.type)){setStatus('รองรับไฟล์ PNG, JPG หรือ WEBP');return;}
  setStatus('กำลังโหลดภาพแม่แบบ…');
  const reader=new FileReader();
- reader.onload=function(){loadTemplate(reader.result).then(function(){qrReady=false;qrSource=null;saveBtn.disabled=true;setStatus('โหลดแม่แบบแล้ว กรอกรหัสแล้วเลือกรูปแบบเพื่อสร้าง');}).catch(function(e){setStatus(e.message);});};
+ reader.onload=function(){loadTemplate(reader.result).then(function(){qrReady=false;qrSource=null;barcodeSource=null;saveBtn.disabled=true;setStatus('โหลดแม่แบบแล้ว กรอกรหัสแล้วเลือกรูปแบบเพื่อสร้าง');}).catch(function(e){setStatus(e.message);});};
  reader.onerror=function(){setStatus('อ่านไฟล์ภาพไม่สำเร็จ');};
  reader.readAsDataURL(file);
 }
@@ -162,16 +170,19 @@ function makeBarcode(text){
 }
 function makeQR(text){
  return new Promise(function(resolve,reject){
-  if(typeof QRCode==='undefined'){reject(new Error('โหลดตัวสร้าง QR ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'));return;}
-  qrstage.innerHTML='';
-  try{new QRCode(qrstage,{text:text,width:700,height:700,colorDark:'#071820',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});}
-  catch(e){reject(new Error('สร้าง QR ไม่สำเร็จ'));return;}
-  setTimeout(function(){
-   const c=qrstage.querySelector('canvas'),img=qrstage.querySelector('img');
-   if(c){resolve(c);return;}
-   if(img&&img.complete){resolve(img);return;}
-   reject(new Error('สร้าง QR ไม่สำเร็จ กรุณาลองอีกครั้ง'));
-  },80);
+  if(typeof ZXing==='undefined'||!ZXing.BrowserQRCodeSvgWriter){reject(new Error('โหลดตัวสร้าง QR UTF-8 ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'));return;}
+  try{
+   const hints=new Map();
+   hints.set(ZXing.EncodeHintType.CHARACTER_SET,'UTF-8');
+   hints.set(ZXing.EncodeHintType.ERROR_CORRECTION,ZXing.QRCodeDecoderErrorCorrectionLevel.H);
+   hints.set(ZXing.EncodeHintType.MARGIN,4);
+   const svg=new ZXing.BrowserQRCodeSvgWriter().write(text,700,700,hints);
+   const markup=new XMLSerializer().serializeToString(svg);
+   const img=new Image();
+   img.onload=function(){resolve(img);};
+   img.onerror=function(){reject(new Error('แปลง QR เป็นภาพไม่สำเร็จ กรุณาลองอีกครั้ง'));};
+   img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(markup);
+  }catch(e){reject(new Error('สร้าง QR ไม่สำเร็จ: '+(e.message||'กรุณาตรวจสอบข้อความ')));}
  });
 }
 codeTypeInput.addEventListener('change',function(){
@@ -190,13 +201,19 @@ document.getElementById('makeBtn').addEventListener('click',async function(){
   const source=barcode?await makeBarcode(code):await makeQR(code);
   layout.code=code;qrSource=barcode?null:source;barcodeSource=barcode?source:null;qrReady=true;
   fitInitialLayout();render(true);saveBtn.disabled=false;
-  setStatus(barcode?'สร้างบาร์โค้ด Code 128 แล้ว ลากย้ายหรือปรับความกว้างได้':'สร้าง QR Code แล้ว ลากย้ายหรือปรับขนาดได้');
+  setStatus(barcode?'สร้างบาร์โค้ด Code 128 แล้ว ลากย้ายหรือปรับความกว้างและขนาดข้อความได้':'สร้าง QR Code แบบ UTF-8 แล้ว ลากย้ายหรือปรับขนาด QR และข้อความใต้ QR ได้');
  }catch(e){setStatus(e.message||'สร้างโค้ดไม่สำเร็จ');}
 });
 sizeRange.addEventListener('input',function(){
  if(!templateReady)return;
  layout.size=Number(sizeRange.value);sizeValue.textContent=layout.size+' px';
  layout.x=Math.max(0,Math.min(layout.x,canvas.width-layout.size));
+ layout.y=Math.max(0,Math.min(layout.y,maxLayoutY()));
+ render(true);
+});
+textSizeRange.addEventListener('input',function(){
+ if(!templateReady)return;
+ layout.textSize=Number(textSizeRange.value);textSizeValue.textContent=layout.textSize+' px';
  layout.y=Math.max(0,Math.min(layout.y,maxLayoutY()));
  render(true);
 });
