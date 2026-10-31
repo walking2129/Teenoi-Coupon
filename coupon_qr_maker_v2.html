@@ -27,12 +27,10 @@ input[type=file]{font-size:14px;padding:8px}input[type=range]{padding:0;accent-c
 <p>เลือกสร้างได้ทีละแบบ: QR Code หรือบาร์โค้ด Code 128 ใส่รหัสแล้วสร้างเฉพาะรูปแบบที่เลือก จากนั้นลากย้ายและปรับขนาดได้</p>
 <label for="templateSelect">เลือกแม่แบบที่บันทึกไว้</label>
 <div class="template-row"><select id="templateSelect" disabled><option value="">ยังไม่มีแม่แบบ</option></select><button id="renameTemplate" class="btn secondary" type="button" disabled>เปลี่ยนชื่อ</button><button id="deleteTemplate" class="btn secondary" type="button" disabled>ลบแม่แบบ</button></div>
-<label for="templateName">ตั้งชื่อแม่แบบ</label>
-<input id="templateName" type="text" inputmode="text" maxlength="60" autocomplete="off" placeholder="เช่น คูปองตี๋น้อย 50 บาท">
 <label for="templateFile">เลือกภาพแม่แบบใหม่</label>
 <input id="templateFile" type="file" accept="image/png,image/jpeg,image/webp">
 <button id="saveTemplate" class="btn primary" type="button" disabled>บันทึกแม่แบบ</button>
-<div id="templateStatus" class="small">อัปโหลดภาพ ตั้งชื่อแม่แบบ แล้วกดบันทึก แม่แบบเดิมจะไม่ถูกเขียนทับ</div>
+<div id="templateStatus" class="small">อัปโหลดภาพแล้วกดบันทึกเพื่อเพิ่มแม่แบบใหม่ ต้องการตั้งชื่อเองกดปุ่ม “เปลี่ยนชื่อ” ในรายการได้</div>
 <label for="codeType">เลือกรูปแบบ</label>
 <select id="codeType"><option value="qr">QR Code</option><option value="barcode">บาร์โค้ด (Code 128)</option></select>
 <label for="codeInput">รหัสคูปอง / ข้อความ</label>
@@ -60,7 +58,7 @@ const ACTIVE_KEY='coupon_qr_maker_v2_active_template';
 const canvas=document.getElementById('preview'),ctx=canvas.getContext('2d');
 const statusEl=document.getElementById('status'),saveBtn=document.getElementById('saveBtn');
 const templateInput=document.getElementById('templateFile'),templateSelect=document.getElementById('templateSelect');
-const templateNameInput=document.getElementById('templateName'),saveTemplateBtn=document.getElementById('saveTemplate');
+const saveTemplateBtn=document.getElementById('saveTemplate');
 const deleteTemplateBtn=document.getElementById('deleteTemplate'),renameTemplateBtn=document.getElementById('renameTemplate'),templateStatus=document.getElementById('templateStatus');
 const sizeRange=document.getElementById('sizeRange'),sizeValue=document.getElementById('sizeValue'),codeInput=document.getElementById('codeInput');
 const textSizeRange=document.getElementById('textSizeRange'),textSizeValue=document.getElementById('textSizeValue'),textSizeLabel=document.getElementById('textSizeLabel');
@@ -128,7 +126,7 @@ function refreshTemplateSelect(){
 function uniqueTemplateName(fileName){
  const base=(fileName||'แม่แบบใหม่').replace(/\.[^.]+$/,'').trim()||'แม่แบบใหม่';
  let name=base,n=2;
- while(templates.some(function(item){return item.name===name;})){name=base+' ('+n+')';n++;}
+ while(templates.some(function(item){return (item.customName||item.name||'').toLocaleLowerCase()===name.toLocaleLowerCase();})){name=base+' ('+n+')';n++;}
  return name;
 }
 function loadTemplate(data){
@@ -163,24 +161,17 @@ function activateTemplate(id){
  });
 }
 function updateTemplateSaveButton(){
- const name=templateNameInput.value.trim();
- saveTemplateBtn.disabled=!(pendingTemplateFile&&name.length>0);
+ saveTemplateBtn.disabled=!pendingTemplateFile;
 }
-templateNameInput.addEventListener('input',updateTemplateSaveButton);
 templateInput.addEventListener('change',function(e){
  pendingTemplateFile=e.target.files&&e.target.files[0]?e.target.files[0]:null;
- if(pendingTemplateFile)templateStatus.textContent='เลือกภาพแล้ว: '+pendingTemplateFile.name+' · ตั้งชื่อแล้วกดบันทึก';
+ if(pendingTemplateFile)templateStatus.textContent='เลือกภาพแล้ว: '+pendingTemplateFile.name+' · กดบันทึกแม่แบบ';
  updateTemplateSaveButton();
 });
 function handleFile(file){
  if(!file)return;
  if(!/^image\/(png|jpeg|webp)$/.test(file.type)){setStatus('รองรับไฟล์ PNG, JPG หรือ WEBP');return;}
- const name=templateNameInput.value.trim();
- if(!name){setStatus('กรุณาพิมพ์ชื่อแม่แบบก่อนบันทึก');templateNameInput.focus();return;}
- if(templates.some(function(item){return item.name.toLocaleLowerCase()===name.toLocaleLowerCase();})){
-  setStatus('มีแม่แบบชื่อ "'+name+'" อยู่แล้ว กรุณาใช้ชื่ออื่น');
-  templateNameInput.focus();return;
- }
+ const name=uniqueTemplateName(file.name);
  setStatus('กำลังบันทึกแม่แบบ "'+name+'"…');
  const reader=new FileReader();
  reader.onload=function(){
@@ -192,7 +183,6 @@ function handleFile(file){
    return;
   }
   refreshTemplateSelect();
-  templateNameInput.value='';
   templateInput.value='';
   pendingTemplateFile=null;
   updateTemplateSaveButton();
