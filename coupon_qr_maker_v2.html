@@ -26,7 +26,7 @@ input[type=file]{font-size:14px;padding:8px}input[type=range]{padding:0;accent-c
 <h1>เครื่องมือสร้าง QR บนแม่แบบ</h1>
 <p>เลือกสร้างได้ทีละแบบ: QR Code หรือบาร์โค้ด Code 128 ใส่รหัสแล้วสร้างเฉพาะรูปแบบที่เลือก จากนั้นลากย้ายและปรับขนาดได้</p>
 <label for="templateSelect">เลือกแม่แบบที่บันทึกไว้</label>
-<div class="template-row"><select id="templateSelect" disabled><option value="">ยังไม่มีแม่แบบ</option></select><button id="deleteTemplate" class="btn secondary" type="button" disabled>ลบแม่แบบ</button></div>
+<div class="template-row"><select id="templateSelect" disabled><option value="">ยังไม่มีแม่แบบ</option></select><button id="renameTemplate" class="btn secondary" type="button" disabled>เปลี่ยนชื่อ</button><button id="deleteTemplate" class="btn secondary" type="button" disabled>ลบแม่แบบ</button></div>
 <label for="templateName">ตั้งชื่อแม่แบบ</label>
 <input id="templateName" type="text" inputmode="text" maxlength="60" autocomplete="off" placeholder="เช่น คูปองตี๋น้อย 50 บาท">
 <label for="templateFile">เลือกภาพแม่แบบใหม่</label>
@@ -61,7 +61,7 @@ const canvas=document.getElementById('preview'),ctx=canvas.getContext('2d');
 const statusEl=document.getElementById('status'),saveBtn=document.getElementById('saveBtn');
 const templateInput=document.getElementById('templateFile'),templateSelect=document.getElementById('templateSelect');
 const templateNameInput=document.getElementById('templateName'),saveTemplateBtn=document.getElementById('saveTemplate');
-const deleteTemplateBtn=document.getElementById('deleteTemplate'),templateStatus=document.getElementById('templateStatus');
+const deleteTemplateBtn=document.getElementById('deleteTemplate'),renameTemplateBtn=document.getElementById('renameTemplate'),templateStatus=document.getElementById('templateStatus');
 const sizeRange=document.getElementById('sizeRange'),sizeValue=document.getElementById('sizeValue'),codeInput=document.getElementById('codeInput');
 const textSizeRange=document.getElementById('textSizeRange'),textSizeValue=document.getElementById('textSizeValue'),textSizeLabel=document.getElementById('textSizeLabel');
 const codeTypeInput=document.getElementById('codeType'),sizeLabel=document.getElementById('sizeLabel'),makeBtn=document.getElementById('makeBtn');
@@ -117,12 +117,12 @@ function refreshTemplateSelect(){
  templateSelect.innerHTML='';
  if(!templates.length){
   const opt=document.createElement('option');opt.value='';opt.textContent='ยังไม่มีแม่แบบที่บันทึกไว้';templateSelect.appendChild(opt);
-  templateSelect.disabled=true;deleteTemplateBtn.disabled=true;return;
+  templateSelect.disabled=true;deleteTemplateBtn.disabled=true;renameTemplateBtn.disabled=true;return;
  }
  templates.forEach(function(item){
-  const opt=document.createElement('option');opt.value=item.id;opt.textContent=item.name;templateSelect.appendChild(opt);
+  const opt=document.createElement('option');opt.value=item.id;opt.textContent=item.customName||item.name;templateSelect.appendChild(opt);
  });
- templateSelect.disabled=false;deleteTemplateBtn.disabled=false;
+ templateSelect.disabled=false;deleteTemplateBtn.disabled=false;renameTemplateBtn.disabled=false;
  if(activeTemplateId&&templates.some(function(item){return item.id===activeTemplateId;}))templateSelect.value=activeTemplateId;
 }
 function uniqueTemplateName(fileName){
@@ -152,13 +152,14 @@ function activateTemplate(id){
  try{localStorage.setItem(ACTIVE_KEY,item.id);}catch(e){}
  refreshTemplateSelect();
  resetGeneratedCode();
- setStatus('กำลังเปิดแม่แบบ '+item.name+'…');
+ const displayName=item.customName||item.name;
+ setStatus('กำลังเปิดแม่แบบ '+displayName+'…');
  loadTemplate(item.data).then(function(){
-  templateStatus.textContent='กำลังใช้งาน: '+item.name+' · บันทึกไว้ในเบราว์เซอร์นี้';
-  setStatus('เลือกแม่แบบ '+item.name+' แล้ว กรอกรหัสและเลือกรูปแบบเพื่อสร้าง');
+  templateStatus.textContent='กำลังใช้งาน: '+displayName+' · บันทึกไว้ในเบราว์เซอร์นี้';
+  setStatus('เลือกแม่แบบ '+displayName+' แล้ว กรอกรหัสและเลือกรูปแบบเพื่อสร้าง');
  }).catch(function(e){
   setStatus(e.message);
-  templateStatus.textContent='เปิดแม่แบบไม่สำเร็จ: '+item.name;
+  templateStatus.textContent='เปิดแม่แบบไม่สำเร็จ: '+displayName;
  });
 }
 function updateTemplateSaveButton(){
@@ -183,7 +184,7 @@ function handleFile(file){
  setStatus('กำลังบันทึกแม่แบบ "'+name+'"…');
  const reader=new FileReader();
  reader.onload=function(){
-  const item={id:templateId(),name:name,data:reader.result};
+  const item={id:templateId(),name:name,customName:name,originalFileName:file.name,data:reader.result};
   templates.push(item);
   if(!persistTemplates()){
    templates.pop();
@@ -202,10 +203,31 @@ function handleFile(file){
 }
 saveTemplateBtn.addEventListener('click',function(){handleFile(pendingTemplateFile);});
 templateSelect.addEventListener('change',function(){if(templateSelect.value)activateTemplate(templateSelect.value);});
+renameTemplateBtn.addEventListener('click',function(){
+ const item=templates.find(function(t){return t.id===activeTemplateId;});
+ if(!item)return;
+ const currentName=item.customName||item.name||'';
+ const nextName=prompt('ตั้งชื่อใหม่ให้แม่แบบนี้:',currentName);
+ if(nextName===null)return;
+ const name=nextName.trim();
+ if(!name){alert('กรุณาพิมพ์ชื่อแม่แบบ');return;}
+ if(templates.some(function(t){return t.id!==item.id&&(t.customName||t.name||'').toLocaleLowerCase()===name.toLocaleLowerCase();})){
+  alert('มีแม่แบบชื่อ "'+name+'" อยู่แล้ว กรุณาใช้ชื่ออื่น');return;
+ }
+ const oldName=item.name,oldCustomName=item.customName;
+ item.name=name;item.customName=name;
+ if(!persistTemplates()){
+  item.name=oldName;item.customName=oldCustomName;
+  alert('เปลี่ยนชื่อไม่สำเร็จ กรุณาลองอีกครั้ง');return;
+ }
+ refreshTemplateSelect();
+ templateStatus.textContent='เปลี่ยนชื่อแม่แบบเป็น: '+name;
+ setStatus('เปลี่ยนชื่อแม่แบบเรียบร้อยแล้ว');
+});
 deleteTemplateBtn.addEventListener('click',function(){
  const item=templates.find(function(t){return t.id===activeTemplateId;});
  if(!item)return;
- if(!confirm('ต้องการลบแม่แบบ "'+item.name+'" ออกจากรายการที่บันทึกไว้ใช่ไหม?'))return;
+ if(!confirm('ต้องการลบแม่แบบ "'+(item.customName||item.name)+'" ออกจากรายการที่บันทึกไว้ใช่ไหม?'))return;
  const oldTemplates=templates.slice();
  templates=templates.filter(function(t){return t.id!==item.id;});
  if(!persistTemplates()){templates=oldTemplates;setStatus('ลบไม่สำเร็จ กรุณาลองอีกครั้ง');return;}
