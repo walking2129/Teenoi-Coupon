@@ -1,32 +1,122 @@
 <!doctype html>
 <html lang="th">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Teenoi Coupon</title><style>body{font-family:Arial,sans-serif;background:#f5f5f5;margin:0;padding:24px;color:#222}main{max-width:520px;margin:10vh auto;background:#fff;padding:22px;border-radius:16px;box-shadow:0 4px 22px #0001;text-align:center}a{color:#c81920}</style></head>
-<body><main><h2>กำลังเปิดคูปอง…</h2><p id="message">กำลังตรวจสอบรหัสและเตรียม QR Code</p><p><a href="/Teenoi-Coupon/coupon-link-generator.html">เปิดเครื่องมือสร้างลิงก์คูปอง</a></p></main>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Coupon</title>
+<style>
+body{font-family:Arial,"Noto Sans Thai",sans-serif;background:#f5f5f5;margin:0;padding:24px;color:#222}
+main{max-width:520px;margin:10vh auto;background:#fff;padding:22px;border-radius:16px;box-shadow:0 4px 22px #0001;text-align:center}
+a{color:#c81920}
+</style>
+</head>
+<body>
+<main><h2 id="heading">กำลังเปิดคูปอง…</h2><p id="message">กำลังตรวจสอบรหัสและเตรียมคูปอง</p><p><a href="/Teenoi-Coupon/coupon-link-generator.html">เครื่องมือสร้างลิงก์ตี๋น้อย</a> · <a href="/Teenoi-Coupon/swensen-link-generator.html">เครื่องมือสร้างลิงก์ Swensen's</a></p></main>
 <script>
 (async function(){
  const BASE='/Teenoi-Coupon/';
  const path=decodeURIComponent(location.pathname);
- const match=path.match(/^\/Teenoi-Coupon\/([^/]+)\/\(3\)\/?$/);
  const msg=document.getElementById('message');
- if(!match){msg.textContent='ไม่พบหน้าที่ต้องการ กรุณาตรวจสอบรหัสหรือลองสร้างลิงก์ใหม่';document.querySelector('h2').textContent='ไม่พบคูปอง';return}
+ const heading=document.getElementById('heading');
+ function loadScript(urls,ready){
+  if(ready())return Promise.resolve();
+  return new Promise(async(resolve,reject)=>{
+   let lastError;
+   for(const url of urls){
+    try{
+     await new Promise((res,rej)=>{
+      const script=document.createElement('script');
+      script.src=url;script.async=true;
+      script.onload=()=>res();
+      script.onerror=()=>{script.remove();rej(new Error('โหลดไลบรารีไม่สำเร็จ'));};
+      document.head.appendChild(script);
+     });
+     if(ready())return resolve();
+    }catch(e){lastError=e;}
+   }
+   reject(lastError||new Error('ไม่พบไลบรารีที่ต้องใช้'));
+  });
+ }
+ function svgToImage(svg){
+  return new Promise((resolve,reject)=>{
+   const blob=new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml;charset=utf-8'});
+   const url=URL.createObjectURL(blob),img=new Image();
+   img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
+   img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('สร้างภาพบาร์โค้ดไม่สำเร็จ'));};
+   img.src=url;
+  });
+ }
+ async function openSwensen(code){
+  heading.textContent="e-Coupon Swensen's";
+  msg.textContent='กำลังเตรียมคูปอง '+code+' ...';
+  const response=await fetch(BASE+'Swensen/Master/index.html?template=1');
+  if(!response.ok)throw new Error('โหลดแม่แบบ Swensen ไม่สำเร็จ ('+response.status+')');
+  const html=await response.text();
+  const parsed=new DOMParser().parseFromString(html,'text/html');
+  const codeEl=parsed.getElementById('code');
+  const barcode=parsed.getElementById('barcode');
+  if(!codeEl||!barcode)throw new Error('แม่แบบ Swensen ไม่มีช่องรหัสหรือบาร์โค้ด');
+  codeEl.textContent=code;
+  barcode.alt="Swensen's Code 128-B barcode "+code;
+  parsed.title="e-Coupon Swensen's 100 bath — "+code;
+  const couponScript=[...parsed.scripts].find(s=>s.textContent.includes('COUPON_KEY'));
+  if(!couponScript)throw new Error('ไม่พบระบบสถานะ USED ในแม่แบบ');
+  couponScript.textContent=couponScript.textContent.replace(/const COUPON_KEY\s*=\s*['"][^'"]+['"];?/,"const COUPON_KEY="+JSON.stringify('swensen_'+code+'_used_v1')+';');
+  await loadScript([
+   'https://cdn.jsdelivr.net/npm/jsbarcode@3.12.1/dist/JsBarcode.all.min.js',
+   'https://unpkg.com/jsbarcode@3.12.1/dist/JsBarcode.all.min.js'
+  ],()=>typeof window.JsBarcode==='function');
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  window.JsBarcode(svg,code,{format:'CODE128B',lineColor:'#000000',background:'#ffffff',displayValue:false,margin:0,width:2.8,height:100});
+  const img=await svgToImage(svg);
+  const canvas=document.createElement('canvas');canvas.width=594;canvas.height=120;
+  const ctx=canvas.getContext('2d',{alpha:false});
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,594,120);
+  ctx.imageSmoothingEnabled=false;
+  const scale=Math.min(500/img.naturalWidth,100/img.naturalHeight);
+  const w=img.naturalWidth*scale,h=img.naturalHeight*scale;
+  ctx.drawImage(img,(594-w)/2,(120-h)/2,w,h);
+  await loadScript([
+   'https://cdn.jsdelivr.net/npm/@zxing/browser@0.2.1/umd/zxing-browser.min.js',
+   'https://unpkg.com/@zxing/browser@0.2.1/umd/zxing-browser.min.js'
+  ],()=>!!(window.ZXingBrowser&&window.ZXingBrowser.BrowserMultiFormatReader));
+  const reader=new window.ZXingBrowser.BrowserMultiFormatReader();
+  const decoded=await reader.decodeFromCanvas(canvas);
+  const actual=typeof decoded.getText==='function'?decoded.getText():'';
+  if(actual!==code)throw new Error('ตรวจสอบบาร์โค้ดไม่ผ่าน: รหัสที่อ่านได้ไม่ตรงกับรหัสคูปอง');
+  barcode.src=canvas.toDataURL('image/png');
+  document.open();
+  document.write('<!doctype html>\n'+parsed.documentElement.outerHTML);
+  document.close();
+ }
+ const swensenMatch=path.match(/^\/Teenoi-Coupon\/Swensen\/([A-Za-z0-9_-]{4,32})\/\(1\)\/?$/);
+ if(swensenMatch){
+  const code=swensenMatch[1].toUpperCase();
+  if(!/^[A-Z0-9_-]{4,32}$/.test(code)){heading.textContent='รหัสคูปองไม่ถูกต้อง';msg.textContent='กรุณาตรวจสอบรหัสแล้วสร้างลิงก์ใหม่';return;}
+  try{await openSwensen(code);}
+  catch(e){heading.textContent='เปิดคูปอง Swensen ไม่สำเร็จ';msg.textContent=(e&&e.message)||'กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';}
+  return;
+ }
+ const match=path.match(/^\/Teenoi-Coupon\/([^/]+)\/\(3\)\/?$/);
+ if(!match){msg.textContent='ไม่พบหน้าที่ต้องการ กรุณาตรวจสอบรหัสหรือลองสร้างลิงก์ใหม่';heading.textContent='ไม่พบคูปอง';return;}
  const code=match[1];
- if(!/^[A-Za-z0-9_-]{4,32}$/.test(code)){msg.textContent='รูปแบบรหัสไม่ถูกต้อง';return}
+ if(!/^[A-Za-z0-9_-]{4,32}$/.test(code)){msg.textContent='รูปแบบรหัสไม่ถูกต้อง';heading.textContent='รหัสไม่ถูกต้อง';return;}
  try{
   const response=await fetch(BASE+'MK966934/(3)/index.html?dynamic_template=1');
-  if(!response.ok) throw new Error('template unavailable');
+  if(!response.ok)throw new Error('template unavailable');
   const html=await response.text();
   const parsed=new DOMParser().parseFromString(html,'text/html');
   parsed.title='e-Coupon Teenoi 100 bath — '+code;
   const codeEl=parsed.getElementById('code');if(codeEl)codeEl.textContent=code;
   const qr=parsed.getElementById('qr');
-  if(qr){
-   qr.alt='QR Code '+code;
-   qr.src='https://api.qrserver.com/v1/create-qr-code/?size=145x145&margin=0&qzone=4&data='+encodeURIComponent(code);
-  }
+  if(qr){qr.alt='QR Code '+code;qr.src='https://api.qrserver.com/v1/create-qr-code/?size=145x145&margin=0&qzone=4&data='+encodeURIComponent(code);}
   const sizing=parsed.createElement('style');
   sizing.textContent='#qr{left:23%;top:41vw;width:54%;}#code{top:95.8vw;}';
   parsed.head.appendChild(sizing);
-    document.open();document.write('<!doctype html>\n'+parsed.documentElement.outerHTML);document.close();
- }catch(e){msg.textContent='เปิดแม่แบบคูปองไม่สำเร็จ กรุณาลองอีกครั้ง หรือตรวจสอบอินเทอร์เน็ต';document.querySelector('h2').textContent='เปิดคูปองไม่สำเร็จ'}
+  document.open();document.write('<!doctype html>\n'+parsed.documentElement.outerHTML);document.close();
+ }catch(e){msg.textContent='เปิดแม่แบบคูปองไม่สำเร็จ กรุณาลองอีกครั้ง หรือตรวจสอบอินเทอร์เน็ต';heading.textContent='เปิดคูปองไม่สำเร็จ';}
 })();
-</script></body></html>
+</script>
+</body>
+</html>
