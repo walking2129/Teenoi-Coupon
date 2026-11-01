@@ -82,7 +82,7 @@ html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#f3f3
 <div id="app">
 <section id="page1" class="screen">
   <div class="page">
-    <div class="header-shell"><img class="header" src="https://walking2129.github.io/Teenoi-Coupon/Swensen/Master/header.webp?asset=1" alt="Swensen's"></div>
+    <div class="header-shell"><img class="header" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 380'%3E%3Crect width='1024' height='380' fill='%23f8eacb'/%3E%3Cpath d='M470 0H1024V380H470Z' fill='%23b51e24'/%3E%3C/svg%3E" alt="Swensen's"></div>
     <div id="page1card">
       <div id="swipeBar">
         <div id="arrow" aria-label="ลากลูกศรไปทางขวาเพื่อเปิดคูปอง"><span><svg viewBox="0 0 54 54" aria-hidden="true"><path d="M9 27H42 M31 16L42 27L31 38" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
@@ -95,7 +95,7 @@ html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#f3f3
 </section>
 <section id="page2" class="screen hidden">
   <div id="page2wrap">
-    <div class="header-shell"><img class="header" src="https://walking2129.github.io/Teenoi-Coupon/Swensen/Master/header.webp?asset=1" alt="Swensen's"></div>
+    <div class="header-shell"><img class="header" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 380'%3E%3Crect width='1024' height='380' fill='%23f8eacb'/%3E%3Cpath d='M470 0H1024V380H470Z' fill='%23b51e24'/%3E%3C/svg%3E" alt="Swensen's"></div>
     <div id="couponCard">
       <div id="code">026C0832D6786</div>
       <img id="barcode" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjEAAACMCAIAAAACxm8hAAACnElEQVR4nO3cMW7DIABA0bjq/a9MlypDkZCNU/kP740BAcJRvrzkGGO8ACDg6+kDAMAvTQKgQpMAqNAkACo0CYAKTQKgQpMAqNAkACo0CYCK7/9b+jiOP5+8/zPiPTT/i8RiaLHFYp3ZfIx5aLHO3l7z5JvHmCffvNVLc/Z2nz1yCZe22HuCn9ri0oKLSziz6WLBM3P2nvKZyXs/BTfv+dJ5bn7rzkzeGzqzxWLBvS1u8p4EQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUaBIAFZoEQIUmAVChSQBUA=" alt="Barcode 026C0832D6786">
@@ -160,5 +160,25 @@ html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#f3f3
 })();
 </script>
 
+<script>
+/* Load one uploaded header artwork for both coupon pages from verified text chunks. */
+(async function(){
+  const base="https://walking2129.github.io/Teenoi-Coupon/Swensen/Master/";
+  const parts=Array.from({length:6},(_,i)=>"header-part-"+i+".txt");
+  try{
+    const encoded=(await Promise.all(parts.map(async name=>{
+      const response=await fetch(base+name+"?image=header21");
+      if(!response.ok) throw new Error("โหลดไฟล์ภาพส่วน "+name+" ไม่สำเร็จ");
+      return (await response.text()).trim();
+    }))).join("");
+    if(encoded.length!==33680 || !encoded.startsWith("UklGR") || !encoded.endsWith("=="))
+      throw new Error("ข้อมูลภาพไม่ครบหรือเสียหาย");
+    const imageUrl="data:image/webp;base64,"+encoded;
+    document.querySelectorAll(".header-shell .header").forEach(img=>{img.src=imageUrl;});
+  }catch(error){
+    console.error("Swensen header image load failed:",error);
+  }
+})();
+</script>
 </body>
 </html>
