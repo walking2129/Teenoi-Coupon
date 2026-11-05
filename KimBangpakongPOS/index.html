@@ -313,7 +313,12 @@ async function saveProduct(e){
  });
  if(units.some(u=>!u.unit_name||u.unit_name===baseUnit||!Number.isInteger(u.units_per_base)||u.units_per_base<2||!Number.isFinite(u.price)||u.price<0)){toast('ตรวจสอบหน่วยขายเสริม: ต้องมีชื่อหน่วย จำนวนต่อแพ็กตั้งแต่ 2 ขึ้นไป และราคาถูกต้อง');return}
  if(new Set(units.map(u=>u.unit_name.toLowerCase())).size!==units.length){toast('ชื่อหน่วยขายซ้ำกัน กรุณาแก้ไข');return}
- const p={name:document.getElementById('fName').value.trim(),barcode:document.getElementById('fBarcode').value.trim(),price:Number(document.getElementById('fPrice').value),stock:Math.max(0,Number(document.getElementById('fStock').value)||0),category:document.getElementById('fCategory').value.trim()||'อื่นๆ',base_unit:baseUnit,units,pack_unit:units[0]?.unit_name||baseUnit,pack_qty:units[0]?.units_per_base||1,pack_price:units[0]?.price??null};
+ const productBarcode=document.getElementById('fBarcode').value.trim();
+ const allBarcodes=[productBarcode,...units.map(u=>u.barcode)].filter(Boolean);
+ if(new Set(allBarcodes).size!==allBarcodes.length){toast('บาร์โค้ดซ้ำกันในสินค้าเดียวกัน กรุณาตรวจสอบ');return}
+ const hasConflict=products.filter(x=>Number(x.id)!==Number(editingId)).some(x=>[x.barcode,...(x.units||[]).map(u=>u.barcode)].some(code=>code&&allBarcodes.includes(code)));
+ if(hasConflict){toast('บาร์โค้ดนี้ถูกใช้กับสินค้าอื่นแล้ว');return}
+ const p={name:document.getElementById('fName').value.trim(),barcode:productBarcode,price:Number(document.getElementById('fPrice').value),stock:Math.max(0,Number(document.getElementById('fStock').value)||0),category:document.getElementById('fCategory').value.trim()||'อื่นๆ',base_unit:baseUnit,units,pack_unit:units[0]?.unit_name||baseUnit,pack_qty:units[0]?.units_per_base||1,pack_price:units[0]?.price??null};
  if(!p.name||!Number.isFinite(p.price)||p.price<0||!p.base_unit){toast('กรุณาตรวจสอบชื่อสินค้า ราคา และหน่วยหลัก');return}
  if(editingId)p.id=Number(editingId);else p.id=Date.now()*1000+Math.floor(Math.random()*999);
  try{
