@@ -44,15 +44,15 @@ const STORE={name:'คิม บางปะกง',address:'88/121-122 หม�
 const POS_STORE_ID='3e0bf7a4-2582-4b69-8c96-8e24e3bfe8dc';
 const POS_CLOUD_CONFIG_KEY='kim_pos_supabase_config';
 let products=load('kim_pos_products',DEFAULT_PRODUCTS),sales=load('kim_pos_sales',[]),cart=[],category='ทั้งหมด',editingId=null,scannerStream=null,scannerControls=null,scannerReader=null,scanActive=false,lastCode='',lastScanAt=0,scanLastSeen=0;
-let supabaseClient=null,cloudAuthenticated=false,cloudOnline=false,cloudSyncTimer=null,cloudSyncBusy=false,cartRequestId=null,supabaseLibraryPromise=null;
+let supabaseClient=null,cloudAuthenticated=false,cloudOnline=false,cloudBooting=false,cloudSyncTimer=null,cloudSyncBusy=false,cartRequestId=null,supabaseLibraryPromise=null;
 function load(k,d){try{let x=localStorage.getItem(k);return x?JSON.parse(x):JSON.parse(JSON.stringify(d))}catch(e){return JSON.parse(JSON.stringify(d))}}
 function save(){try{localStorage.setItem('kim_pos_products',JSON.stringify(products));localStorage.setItem('kim_pos_sales',JSON.stringify(sales))}catch(e){}}
 function getCloudConfig(){try{return JSON.parse(localStorage.getItem(POS_CLOUD_CONFIG_KEY)||'{}')}catch(e){return {}}}
 function updateCloudStatus(){
  const el=document.getElementById('cloudStatus'),foot=document.getElementById('dataFooter');
- let label=cloudAuthenticated?(cloudOnline?'● ฐานข้อมูลกลางเชื่อมต่อแล้ว':'● เข้าสู่ระบบแล้ว แต่ยังซิงก์ไม่ได้'):'● ยังไม่เชื่อมฐานข้อมูลกลาง';
+ let label=cloudBooting?'◌ กำลังเชื่อมต่อฐานข้อมูลกลาง':(cloudAuthenticated?(cloudOnline?'● ฐานข้อมูลกลางเชื่อมต่อแล้ว':'● เข้าสู่ระบบแล้ว แต่ยังซิงก์ไม่ได้'):'● ยังไม่เชื่อมฐานข้อมูลกลาง');
  if(el)el.textContent=label;
- if(foot)foot.textContent=cloudAuthenticated?(cloudOnline?'ข้อมูลสินค้า ราคา สต็อก และยอดขายใช้ฐานข้อมูลกลางร่วมกัน · ซิงก์อัตโนมัติทุก 5 วินาที':'บัญชีเข้าสู่ระบบแล้ว แต่ยังติดต่อฐานข้อมูลกลางไม่ได้ · อย่าถือว่าการเปลี่ยนแปลงซิงก์สำเร็จ'):'ยังไม่ได้เชื่อมต่อฐานข้อมูลกลาง · ข้อมูลที่บันทึกขณะนี้อยู่ในเบราว์เซอร์เครื่องนี้เท่านั้น';
+ if(foot)foot.textContent=cloudBooting?'กำลังตรวจสอบการเชื่อมต่อฐานข้อมูลกลาง กรุณารอสักครู่ก่อนบันทึกรายการ':(cloudAuthenticated?(cloudOnline?'ข้อมูลสินค้า ราคา สต็อก และยอดขายใช้ฐานข้อมูลกลางร่วมกัน · ซิงก์อัตโนมัติทุก 5 วินาที':'บัญชีเข้าสู่ระบบแล้ว แต่ยังติดต่อฐานข้อมูลกลางไม่ได้ · อย่าถือว่าการเปลี่ยนแปลงซิงก์สำเร็จ'):'ยังไม่ได้เชื่อมต่อฐานข้อมูลกลาง · ข้อมูลที่บันทึกขณะนี้อยู่ในเบราว์เซอร์เครื่องนี้เท่านั้น');
 }
 function loadSupabaseLibrary(){
  if(window.supabase&&window.supabase.createClient)return Promise.resolve(window.supabase);
@@ -89,13 +89,14 @@ async function fetchCloudData(){
  cloudOnline=true;updateCloudStatus();
 }
 async function activateCloud(){
- cloudAuthenticated=true;cloudOnline=false;updateCloudStatus();
+ cloudAuthenticated=true;cloudOnline=false;cloudBooting=true;updateCloudStatus();
  const {error}=await supabaseClient.rpc('pos_import_legacy',{
   p_store_id:POS_STORE_ID,
   p_products:load('kim_pos_products',DEFAULT_PRODUCTS),
   p_sales:load('kim_pos_sales',[])
  });
  if(error)throw error;
+ cloudBooting=false;
  await fetchCloudData();
  if(cloudSyncTimer)clearInterval(cloudSyncTimer);
  cloudSyncTimer=setInterval(async()=>{
@@ -108,14 +109,15 @@ async function activateCloud(){
 async function autoConnectCloud(){
  const cfg=getCloudConfig();
  if(!cfg.url||!cfg.anonKey){updateCloudStatus();return}
+ cloudBooting=true;updateCloudStatus();
  try{
   await loadSupabaseLibrary();
   supabaseClient=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
   const {data,error}=await supabaseClient.auth.getSession();
   if(error)throw error;
   if(data.session){cloudAuthenticated=true;await activateCloud()}
-  else updateCloudStatus();
- }catch(e){cloudOnline=false;updateCloudStatus();console.warn('POS cloud connection:',e)}
+  else{cloudBooting=false;updateCloudStatus();renderCart()}
+ }catch(e){cloudBooting=false;cloudOnline=false;updateCloudStatus();renderCart();console.warn('POS cloud connection:',e)}
 }
 function openCloudSettings(){
  const cfg=getCloudConfig();
@@ -138,6 +140,7 @@ async function connectCloudFromForm(){
  const password=document.getElementById('cloudPassword')?.value||'';
  if(!url.startsWith('https://')||!anonKey||!email||!password){toast('กรุณากรอก URL, public key, อีเมล และรหัสผ่านให้ครบ');return}
  localStorage.setItem(POS_CLOUD_CONFIG_KEY,JSON.stringify({url,anonKey}));
+ cloudBooting=true;updateCloudStatus();renderCart();
  try{
   await loadSupabaseLibrary();
   if(supabaseClient){try{await supabaseClient.auth.signOut()}catch(e){}}
@@ -147,7 +150,7 @@ async function connectCloudFromForm(){
   cloudAuthenticated=true;
   await activateCloud();
   closeModal();toast('เชื่อมต่อฐานข้อมูลกลางสำเร็จ');
- }catch(e){cloudOnline=false;updateCloudStatus();toast('เชื่อมต่อไม่สำเร็จ: '+(e.message||'ตรวจสอบการตั้งค่าและสิทธิ์บัญชี'))}
+ }catch(e){cloudBooting=false;cloudOnline=false;updateCloudStatus();renderCart();toast('เชื่อมต่อไม่สำเร็จ: '+(e.message||'ตรวจสอบการตั้งค่าและสิทธิ์บัญชี'))}
 }
 async function syncCloudNow(){
  try{await fetchCloudData();toast('ซิงก์ข้อมูลล่าสุดแล้ว')}
@@ -156,7 +159,7 @@ async function syncCloudNow(){
 async function disconnectCloud(){
  if(supabaseClient){try{await supabaseClient.auth.signOut()}catch(e){}}
  if(cloudSyncTimer){clearInterval(cloudSyncTimer);cloudSyncTimer=null}
- cloudAuthenticated=false;cloudOnline=false;supabaseClient=null;updateCloudStatus();closeModal();toast('ออกจากระบบฐานข้อมูลกลางแล้ว');
+ cloudAuthenticated=false;cloudOnline=false;cloudBooting=false;supabaseClient=null;updateCloudStatus();closeModal();toast('ออกจากระบบฐานข้อมูลกลางแล้ว');
 }
 function makeRequestUUID(){
  if(window.crypto&&typeof window.crypto.randomUUID==='function')return window.crypto.randomUUID();
@@ -174,12 +177,13 @@ function addToCart(id){let p=products.find(x=>x.id===id);if(!p)return;if(p.stock
 function changeQty(id,n){let c=cart.find(x=>x.id===id),p=products.find(x=>x.id===id);if(!c)return;c.qty+=n;if(c.qty<=0)cart=cart.filter(x=>x.id!==id);else if(p&&c.qty>p.stock){c.qty=p.stock;toast('จำนวนเกินสต็อก')}renderCart()}
 function clearCart(){cart=[];cartRequestId=null;document.getElementById('discountInput').value=0;renderCart()}
 function totals(){let sub=cart.reduce((a,c)=>a+c.price*c.qty,0),disc=Math.max(0,Math.min(sub,Number(document.getElementById('discountInput').value)||0));return{sub,disc,total:sub-disc}}
-function renderCart(){let el=document.getElementById('cartItems');el.innerHTML=cart.length?cart.map(c=>`<div class="cart-item"><div><div class="ci-name">${escapeHtml(c.name)}</div><div class="ci-price">${money(c.price)} × ${c.qty} = <b>${money(c.price*c.qty)}</b></div></div><div class="qty"><button onclick="changeQty(${c.id},-1)">−</button><span>${c.qty}</span><button onclick="changeQty(${c.id},1)">＋</button></div></div>`).join(''):'<div class="empty">ยังไม่มีสินค้าในตะกร้า<br>เลือกสินค้าจากรายการด้านซ้าย</div>';let t=totals();document.getElementById('cartCount').textContent=cart.reduce((a,c)=>a+c.qty,0)+' ชิ้น';document.getElementById('subtotal').textContent=money(t.sub);document.getElementById('grandTotal').textContent=money(t.total);document.getElementById('checkoutBtn').disabled=!cart.length||t.total<=0}
+function renderCart(){let el=document.getElementById('cartItems');el.innerHTML=cart.length?cart.map(c=>`<div class="cart-item"><div><div class="ci-name">${escapeHtml(c.name)}</div><div class="ci-price">${money(c.price)} × ${c.qty} = <b>${money(c.price*c.qty)}</b></div></div><div class="qty"><button onclick="changeQty(${c.id},-1)">−</button><span>${c.qty}</span><button onclick="changeQty(${c.id},1)">＋</button></div></div>`).join(''):'<div class="empty">ยังไม่มีสินค้าในตะกร้า<br>เลือกสินค้าจากรายการด้านซ้าย</div>';let t=totals();document.getElementById('cartCount').textContent=cart.reduce((a,c)=>a+c.qty,0)+' ชิ้น';document.getElementById('subtotal').textContent=money(t.sub);document.getElementById('grandTotal').textContent=money(t.total);document.getElementById('checkoutBtn').disabled=!cart.length||t.total<=0||cloudBooting}
 function openModal(title,body){document.getElementById('modalTitle').textContent=title;document.getElementById('modalBody').innerHTML=body;document.getElementById('genericModal').classList.add('show')}
 function closeModal(){document.getElementById('genericModal').classList.remove('show');stopScanner()}
 function openAddProduct(id=null){editingId=id;let p=id?products.find(x=>x.id===id):{name:'',barcode:'',price:'',stock:'',category:'อื่นๆ'};openModal(id?'แก้ไขสินค้า':'เพิ่มสินค้าใหม่',`<form onsubmit="saveProduct(event)"><div class="field"><label>ชื่อสินค้า *</label><input id="fName" required value="${escapeHtml(p.name)}" placeholder="เช่น น้ำดื่ม 600 มล."></div><div class="field"><label>รหัสบาร์โค้ด</label><input id="fBarcode" value="${escapeHtml(p.barcode||'')}" placeholder="สแกนหรือพิมพ์รหัสสินค้า"></div><div class="fieldgrid"><div class="field"><label>ราคาขาย (บาท) *</label><input id="fPrice" required type="number" min="0" step="0.01" value="${p.price}"></div><div class="field"><label>จำนวนคงเหลือ</label><input id="fStock" type="number" min="0" step="1" value="${p.stock}"></div></div><div class="field"><label>หมวดหมู่</label><input id="fCategory" value="${escapeHtml(p.category||'อื่นๆ')}"></div><div class="modal-actions"><button type="button" class="btn btn-light" onclick="closeModal()">ยกเลิก</button><button class="btn btn-primary">บันทึกสินค้า</button></div></form>`)}
 async function saveProduct(e){
  e.preventDefault();
+ if(cloudBooting){toast('กำลังเชื่อมต่อฐานข้อมูลกลาง กรุณาลองอีกครั้ง');return}
  const p={name:document.getElementById('fName').value.trim(),barcode:document.getElementById('fBarcode').value.trim(),price:Number(document.getElementById('fPrice').value),stock:Math.max(0,Number(document.getElementById('fStock').value)||0),category:document.getElementById('fCategory').value.trim()||'อื่นๆ'};
  if(!p.name||!Number.isFinite(p.price)||p.price<0){toast('กรุณาตรวจสอบชื่อสินค้าและราคา');return}
  if(editingId)p.id=Number(editingId);else p.id=Date.now()*1000+Math.floor(Math.random()*999);
@@ -196,6 +200,7 @@ async function saveProduct(e){
 }
 function renderInventory(){let q=(document.getElementById('manageSearch')?.value||'').toLowerCase();let arr=products.filter(p=>p.name.toLowerCase().includes(q)||String(p.barcode).includes(q));document.getElementById('inventoryRows').innerHTML=arr.map(p=>`<tr><td><b>${escapeHtml(p.name)}</b><br><span class="sub">${escapeHtml(p.category||'')}</span></td><td>${escapeHtml(p.barcode||'-')}</td><td>${money(p.price)}</td><td><span class="tag ${p.stock<=10?'warn':''}">${p.stock}</span></td><td><button class="btn btn-light" style="padding:6px 9px" onclick="openAddProduct(${p.id})">แก้ไข</button> <button class="btn btn-danger" style="padding:6px 9px" onclick="deleteProduct(${p.id})">ลบ</button></td></tr>`).join('')||'<tr><td colspan="5" class="empty-table">ยังไม่มีสินค้า</td></tr>'}
 async function deleteProduct(id){
+ if(cloudBooting){toast('กำลังเชื่อมต่อฐานข้อมูลกลาง กรุณาลองอีกครั้ง');return}
  if(!confirm('ต้องการลบสินค้านี้ใช่หรือไม่?'))return;
  try{
   if(cloudAuthenticated){
@@ -211,6 +216,7 @@ function openCheckout(){let t=totals();openModal('รับชำระเงิ
 function toggleCash(){let m=document.getElementById('payMethod').value;document.getElementById('cashField').classList.toggle('hidden',m!=='เงินสด');document.getElementById('changeBox').classList.toggle('hidden',m!=='เงินสด')}
 function updateChange(total){let r=Number(document.getElementById('cashReceived')?.value)||0;let el=document.getElementById('changeAmount');if(el)el.textContent=money(Math.max(0,r-total))}
 async function completeSale(){
+ if(cloudBooting){toast('กำลังเชื่อมต่อฐานข้อมูลกลาง กรุณารอสักครู่');return}
  let t=totals(),method=document.getElementById('payMethod').value,customerName=(document.getElementById('customerName')?.value||'').trim(),received=method==='เงินสด'?Number(document.getElementById('cashReceived').value)||0:t.total;
  if(method==='เงินสด'&&received<t.total){toast('จำนวนเงินที่รับมายังไม่ครบ');return}
  for(let c of cart){let p=products.find(x=>x.id===c.id);if(!p||p.stock<c.qty){toast('สต็อกสินค้าไม่เพียงพอ: '+c.name);return}}
