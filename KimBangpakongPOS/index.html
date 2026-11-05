@@ -233,7 +233,7 @@ async function completeSale(){
    if(!cartRequestId)cartRequestId=makeRequestUUID();
    const {data,error}=await supabaseClient.rpc('pos_complete_sale',{
     p_store_id:POS_STORE_ID,
-    p_sale:{requestId:cartRequestId,items:cart.map(x=>({id:x.id,qty:x.qty})),discount:t.disc,method,received,customerName}
+    p_sale:{requestId:cartRequestId,items:cart.map(x=>({id:x.id,qty:x.qty,price:x.price})),discount:t.disc,method,received,customerName}
    });
    if(error)throw error;
    const sale=mapCloudSale(data);
