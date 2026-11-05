@@ -43,11 +43,12 @@ const DEFAULT_PRODUCTS=[
 const STORE={name:'คิม บางปะกง',address:'88/121-122 หมู่ 19 ซอย 4 บางปะกงพรหมเทพรังสรรค์ ถนนบางนา-ตราด ตำบลบางปะกง อำเภอบางปะกง จังหวัดฉะเชิงเทรา 24130',phone:'094-567-4577'};
 const POS_STORE_ID='3e0bf7a4-2582-4b69-8c96-8e24e3bfe8dc';
 const POS_CLOUD_CONFIG_KEY='kim_pos_supabase_config';
+const POS_CLOUD_DEFAULT={url:'https://gstdbxlzeovjomttnyes.supabase.co',anonKey:'sb_publishable_cjkE6-wImDrFNBnE5vAa7A_k4VyST-o'};
 let products=load('kim_pos_products',DEFAULT_PRODUCTS),sales=load('kim_pos_sales',[]),cart=[],category='ทั้งหมด',editingId=null,scannerStream=null,scannerControls=null,scannerReader=null,scanActive=false,lastCode='',lastScanAt=0,scanLastSeen=0;
 let supabaseClient=null,cloudAuthenticated=false,cloudOnline=false,cloudBooting=false,cloudSyncTimer=null,cloudSyncBusy=false,cartRequestId=null,supabaseLibraryPromise=null;
 function load(k,d){try{let x=localStorage.getItem(k);return x?JSON.parse(x):JSON.parse(JSON.stringify(d))}catch(e){return JSON.parse(JSON.stringify(d))}}
 function save(){try{localStorage.setItem('kim_pos_products',JSON.stringify(products));localStorage.setItem('kim_pos_sales',JSON.stringify(sales))}catch(e){}}
-function getCloudConfig(){try{return JSON.parse(localStorage.getItem(POS_CLOUD_CONFIG_KEY)||'{}')}catch(e){return {}}}
+function getCloudConfig(){try{return {...POS_CLOUD_DEFAULT,...JSON.parse(localStorage.getItem(POS_CLOUD_CONFIG_KEY)||'{}')}}catch(e){return POS_CLOUD_DEFAULT}}
 function updateCloudStatus(){
  const el=document.getElementById('cloudStatus'),foot=document.getElementById('dataFooter');
  let label=cloudBooting?'◌ กำลังเชื่อมต่อฐานข้อมูลกลาง':(cloudAuthenticated?(cloudOnline?'● ฐานข้อมูลกลางเชื่อมต่อแล้ว':'● เข้าสู่ระบบแล้ว แต่ยังซิงก์ไม่ได้'):'● ยังไม่เชื่อมฐานข้อมูลกลาง');
