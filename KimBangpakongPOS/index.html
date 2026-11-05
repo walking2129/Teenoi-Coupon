@@ -309,7 +309,7 @@ async function saveProduct(e){
  document.querySelectorAll('#unitRows .unit-row').forEach(row=>{
   const unit_name=row.querySelector('.unit-name').value.trim(),barcode=row.querySelector('.unit-barcode').value.trim(),factorRaw=row.querySelector('.unit-factor').value.trim(),priceRaw=row.querySelector('.unit-price').value.trim();
   if(!unit_name&&!barcode&&!factorRaw&&!priceRaw)return;
-  units.push({id:row.dataset.unitId?Number(row.dataset.unitId):null,unit_name,barcode,units_per_base:Number(factorRaw),price:Number(priceRaw)});
+  const existingUnitId=Number(row.dataset.unitId)||0;const unitId=cloudAuthenticated?(existingUnitId>0?existingUnitId:null):(existingUnitId||-(Date.now()+units.length+1));units.push({id:unitId,unit_name,barcode,units_per_base:Number(factorRaw),price:Number(priceRaw)});
  });
  if(units.some(u=>!u.unit_name||u.unit_name===baseUnit||!Number.isInteger(u.units_per_base)||u.units_per_base<2||!Number.isFinite(u.price)||u.price<0)){toast('ตรวจสอบหน่วยขายเสริม: ต้องมีชื่อหน่วย จำนวนต่อแพ็กตั้งแต่ 2 ขึ้นไป และราคาถูกต้อง');return}
  if(new Set(units.map(u=>u.unit_name.toLowerCase())).size!==units.length){toast('ชื่อหน่วยขายซ้ำกัน กรุณาแก้ไข');return}
