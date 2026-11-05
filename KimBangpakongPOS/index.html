@@ -189,16 +189,15 @@ async function saveProduct(e){
  if(editingId)p.id=Number(editingId);else p.id=Date.now()*1000+Math.floor(Math.random()*999);
  try{
   if(cloudAuthenticated){
-   if(editingId){
-    const baseline=document.getElementById('fUpdatedAt')?.value||'';
-    const {data:current,error:readError}=await supabaseClient.from('pos_products').select('updated_at').eq('store_id',POS_STORE_ID).eq('id',p.id).maybeSingle();
-    if(readError)throw readError;
-    if(!current)throw new Error('สินค้านี้ถูกลบจากอีกเครื่องแล้ว กรุณาปิดหน้าต่างแล้วโหลดรายการใหม่');
-    if(!baseline||current.updated_at!==baseline)throw new Error('มีการแก้ไขหรือขายสินค้านี้จากอีกเครื่องระหว่างที่คุณเปิดหน้าแก้ไข กรุณาปิดแล้วเปิดแก้ไขใหม่ เพื่อไม่ให้สต็อกทับกัน');
-   }
-   p.updated_at=new Date().toISOString();
-   const {error}=await supabaseClient.from('pos_products').upsert({...p,store_id:POS_STORE_ID},{onConflict:'store_id,id'});
+   const baseline=editingId?(document.getElementById('fUpdatedAt')?.value||null):null;
+   if(editingId&&!baseline)throw new Error('ไม่พบรุ่นข้อมูลสินค้า กรุณาปิดแล้วเปิดแก้ไขใหม่');
+   const {data,error}=await supabaseClient.rpc('pos_save_product',{
+    p_store_id:POS_STORE_ID,
+    p_product:p,
+    p_expected_updated_at:baseline
+   });
    if(error)throw error;
+   if(data&&data.updated_at)p.updated_at=data.updated_at;
   }
   if(editingId){const old=products.find(x=>x.id===Number(editingId));if(old)Object.assign(old,p)}
   else products.push(p);
