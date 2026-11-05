@@ -135,16 +135,23 @@ async function activateCloud(){
 }
 async function autoConnectCloud(){
  const cfg=getCloudConfig();
- if(!cfg.url||!cfg.anonKey){updateCloudStatus();return}
- cloudBooting=true;updateCloudStatus();
+ cloudAuthenticated=false;
+ cloudOnline=false;
+ cloudBooting=true;
+ updateCloudStatus();
+ showLoginScreen('กรุณาเข้าสู่ระบบด้วยอีเมลและรหัสผ่านของร้าน',true);
  try{
   await loadSupabaseLibrary();
-  supabaseClient=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-  const {data,error}=await supabaseClient.auth.getSession();
-  if(error)throw error;
-  if(data.session){cloudAuthenticated=true;await activateCloud()}
-  else{cloudAuthenticated=false;cloudBooting=false;updateCloudStatus();renderCart();showLoginScreen('กรุณาเข้าสู่ระบบด้วยอีเมลและรหัสผ่านของร้าน')}
- }catch(e){cloudBooting=false;cloudOnline=false;updateCloudStatus();renderCart();showLoginScreen('เชื่อมต่อระบบไม่ได้: '+(e.message||'ตรวจสอบอินเทอร์เน็ต'));console.warn('POS cloud connection:',e)}
+  supabaseClient=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+  cloudBooting=false;
+  updateCloudStatus();
+  renderCart();
+  showLoginScreen('กรุณาเข้าสู่ระบบด้วยอีเมลและรหัสผ่านของร้าน');
+ }catch(e){
+  cloudBooting=false;cloudOnline=false;updateCloudStatus();renderCart();
+  showLoginScreen('เชื่อมต่อระบบไม่ได้: '+(e.message||'ตรวจสอบอินเทอร์เน็ต'));
+  console.warn('POS cloud connection:',e);
+ }
 }
 function showLoginScreen(message,loading=false){
  const screen=document.getElementById('loginScreen');
@@ -167,7 +174,7 @@ async function loginPOS(){
  try{
   const cfg=getCloudConfig();
   await loadSupabaseLibrary();
-  supabaseClient=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+  supabaseClient=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
   const {error}=await supabaseClient.auth.signInWithPassword({email,password});
   if(error)throw error;
   cloudAuthenticated=true;
