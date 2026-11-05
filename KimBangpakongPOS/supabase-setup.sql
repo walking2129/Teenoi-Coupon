@@ -180,6 +180,172 @@ begin
     end if;
   end loop;
 
+  -- Preserve the last legacy receipt number for each Bangkok business day.
+  -- This prevents the first cloud receipt from reusing an ID imported from local storage.
+  insert into public.pos_counters (store_id, sale_date, last_no)
+  select
+    p_store_id,
+    (s.date at time zone 'Asia/Bangkok')::date,
+    max(regexp_replace(s.id, '^KB[0-9]{8}-', '')::bigint)
+  from public.pos_sales s
+  where s.store_id = p_store_id
+    and s.id ~ '^KB[0-9]{8}-[0-9]+
+end;
+$$;
+
+create or replace function public.pos_complete_sale(
+  p_store_id uuid,
+  p_sale jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_request_id uuid;
+  v_existing public.pos_sales%rowtype;
+  v_item jsonb;
+  v_product public.pos_products%rowtype;
+  v_qty integer;
+  v_items jsonb := '[]'::jsonb;
+  v_subtotal numeric(14,2) := 0;
+  v_discount numeric(14,2) := 0;
+  v_total numeric(14,2) := 0;
+  v_method text;
+  v_received numeric(14,2);
+  v_change numeric(14,2);
+  v_customer text;
+  v_sale_date timestamptz := now();
+  v_day date;
+  v_no bigint;
+  v_sale_id text;
+begin
+  if auth.uid() is null or not exists (
+    select 1 from public.pos_members
+    where store_id = p_store_id and user_id = auth.uid()
+  ) then
+    raise exception 'บัญชีนี้ไม่มีสิทธิ์เข้าถึงร้านนี้';
+  end if;
+
+  v_request_id := coalesce(nullif(p_sale->>'requestId','')::uuid, gen_random_uuid());
+
+  select * into v_existing
+  from public.pos_sales
+  where store_id = p_store_id and request_id = v_request_id;
+
+  if found then
+    return jsonb_build_object(
+      'id', v_existing.id, 'date', v_existing.date,
+      'items', v_existing.items, 'customerName', v_existing.customer_name,
+      'subtotal', v_existing.subtotal, 'discount', v_existing.discount,
+      'total', v_existing.total, 'method', v_existing.method,
+      'received', v_existing.received, 'change', v_existing.change
+    );
+  end if;
+
+  if coalesce(jsonb_typeof(p_sale->'items'), 'null') <> 'array'
+     or jsonb_array_length(coalesce(p_sale->'items', '[]'::jsonb)) = 0 then
+    raise exception 'ไม่มีสินค้าในบิล';
+  end if;
+
+  -- Lock product rows in ID order. Two registers cannot sell the same
+  -- remaining stock at the same time and drive stock below zero.
+  for v_item in
+    select value
+    from jsonb_array_elements(p_sale->'items')
+    order by (value->>'id')::bigint
+  loop
+    v_qty := coalesce((v_item->>'qty')::integer, 0);
+    if v_qty <= 0 then
+      raise exception 'จำนวนสินค้าไม่ถูกต้อง';
+    end if;
+
+    select * into v_product
+    from public.pos_products
+    where store_id = p_store_id and id = (v_item->>'id')::bigint
+    for update;
+
+    if not found then
+      raise exception 'ไม่พบสินค้าในฐานข้อมูลกลาง (รหัส %) ', (v_item->>'id');
+    end if;
+    if v_product.stock < v_qty then
+      raise exception 'สต็อกไม่พอ: % (เหลือ %)', v_product.name, v_product.stock;
+    end if;
+
+    update public.pos_products
+       set stock = stock - v_qty, updated_at = now()
+     where store_id = p_store_id and id = v_product.id;
+
+    v_subtotal := v_subtotal + (v_product.price * v_qty);
+    v_items := v_items || jsonb_build_array(jsonb_build_object(
+      'id', v_product.id, 'name', v_product.name,
+      'price', v_product.price, 'qty', v_qty
+    ));
+  end loop;
+
+  v_discount := greatest(0, least(
+    v_subtotal, coalesce((p_sale->>'discount')::numeric, 0)
+  ));
+  v_total := v_subtotal - v_discount;
+  v_method := coalesce(nullif(p_sale->>'method',''), 'เงินสด');
+  v_received := case when v_method = 'เงินสด'
+    then coalesce((p_sale->>'received')::numeric, v_total)
+    else v_total end;
+  v_customer := coalesce(p_sale->>'customerName', '');
+
+  if v_method = 'เงินสด' and v_received < v_total then
+    raise exception 'ยอดเงินที่รับมาไม่ครบ หลังตรวจสอบราคาล่าสุด';
+  end if;
+
+  v_change := case when v_method = 'เงินสด'
+    then greatest(0, v_received - v_total) else 0 end;
+
+  v_day := (v_sale_date at time zone 'Asia/Bangkok')::date;
+  insert into public.pos_counters(store_id, sale_date, last_no)
+  values (p_store_id, v_day, 1)
+  on conflict (store_id, sale_date)
+  do update set last_no = public.pos_counters.last_no + 1
+  returning last_no into v_no;
+
+  v_sale_id := 'KB' || to_char(v_day, 'YYYYMMDD') || '-' || lpad(v_no::text, 4, '0');
+
+  insert into public.pos_sales (
+    store_id, id, request_id, date, items, customer_name,
+    subtotal, discount, total, method, received, change, created_by
+  ) values (
+    p_store_id, v_sale_id, v_request_id, v_sale_date, v_items, v_customer,
+    v_subtotal, v_discount, v_total, v_method, v_received, v_change, auth.uid()
+  );
+
+  return jsonb_build_object(
+    'id', v_sale_id, 'date', v_sale_date, 'items', v_items,
+    'customerName', v_customer, 'subtotal', v_subtotal,
+    'discount', v_discount, 'total', v_total, 'method', v_method,
+    'received', v_received, 'change', v_change
+  );
+end;
+$$;
+
+revoke all on function public.pos_import_legacy(uuid, jsonb, jsonb) from public, anon;
+revoke all on function public.pos_complete_sale(uuid, jsonb) from public, anon;
+grant execute on function public.pos_import_legacy(uuid, jsonb, jsonb) to authenticated;
+grant execute on function public.pos_complete_sale(uuid, jsonb) to authenticated;
+
+-- Create user accounts in Authentication > Users first, then add each account
+-- to this store. Replace the example email with the actual login email:
+--
+-- insert into public.pos_members (store_id, user_id, role)
+-- select '3e0bf7a4-2582-4b69-8c96-8e24e3bfe8dc'::uuid, id, 'admin'
+-- from auth.users where email = 'owner@example.com'
+-- on conflict (store_id, user_id) do update set role = excluded.role;
+--
+-- Repeat the statement for each register/cashier account.
+
+  group by (s.date at time zone 'Asia/Bangkok')::date
+  on conflict (store_id, sale_date)
+  do update set last_no = greatest(public.pos_counters.last_no, excluded.last_no);
+
   return jsonb_build_object('initialized', true, 'products_imported', v_count);
 end;
 $$;
