@@ -349,6 +349,9 @@ begin
     if v_product.stock < v_qty then
       raise exception 'สต็อกไม่พอ: % (เหลือ %)', v_product.name, v_product.stock;
     end if;
+    if v_item ? 'price' and v_product.price <> (v_item->>'price')::numeric then
+      raise exception 'ราคาสินค้า % เปลี่ยนจากอีกเครื่อง กรุณายกเลิกบิลแล้วโหลดสินค้าใหม่ก่อนคิดเงิน', v_product.name;
+    end if;
 
     update public.pos_products
        set stock = stock - v_qty, updated_at = now()
@@ -424,7 +427,7 @@ grant execute on function public.pos_complete_sale(uuid, jsonb) to authenticated
 
   group by (s.date at time zone 'Asia/Bangkok')::date
   on conflict (store_id, sale_date)
-  do update set last_no = greatest(public.pos_counters.last_no, excluded.last_no);
+  do update set last_no = greatest(pos_counters.last_no, excluded.last_no);
 
   return jsonb_build_object('initialized', true, 'products_imported', v_count);
 end;
