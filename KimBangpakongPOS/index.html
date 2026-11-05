@@ -251,12 +251,12 @@ function renderProducts(){
  document.getElementById('productsGrid').innerHTML=arr.length?arr.map(p=>{
   const base=p.base_unit||'ชิ้น', pack=p.pack_unit||'ลัง', packQty=Math.max(1,Number(p.pack_qty)||1);
   const hasPack=p.pack_price!==null&&p.pack_price!==undefined&&Number.isFinite(Number(p.pack_price))&&pack!==base&&packQty>1;
-  return `<div class='product'><div><div class='pname'>${escapeHtml(p.name)}</div><div class='pmeta'>${escapeHtml(p.barcode||'ไม่มีบาร์โค้ด')}</div><div class='stock ${p.stock<=10?'low':''}'>คงเหลือ ${p.stock} ${escapeHtml(base)}</div>${hasPack?`<div class='pmeta'>1 ${escapeHtml(pack)} = ${packQty} ${escapeHtml(base)}</div>`:''}</div><div class='p-actions'><button class='p-add' onclick='addToCart(${p.id},\'base\')' ${p.stock<1?'disabled':''}>＋ ${escapeHtml(base)} · ${money(p.price)}</button>${hasPack?`<button class='p-add pack' onclick='addToCart(${p.id},\'pack\')' ${p.stock<packQty?'disabled':''}>＋ ${escapeHtml(pack)} · ${money(p.pack_price)}</button>`:''}</div></div>`;
+  return `<div class='product'><div><div class='pname'>${escapeHtml(p.name)}</div><div class='pmeta'>${escapeHtml(p.barcode||'ไม่มีบาร์โค้ด')}</div><div class='stock ${p.stock<=10?'low':''}'>คงเหลือ ${p.stock} ${escapeHtml(base)}</div>${hasPack?`<div class='pmeta'>1 ${escapeHtml(pack)} = ${packQty} ${escapeHtml(base)}</div>`:''}</div><div class='p-actions'><button class='p-add' onclick='addToCart(${p.id},0)' ${p.stock<1?'disabled':''}>＋ ${escapeHtml(base)} · ${money(p.price)}</button>${hasPack?`<button class='p-add pack' onclick='addToCart(${p.id},1)' ${p.stock<packQty?'disabled':''}>＋ ${escapeHtml(pack)} · ${money(p.pack_price)}</button>`:''}</div></div>`;
  }).join(''):'<div class=empty style=grid-column:1/-1>ไม่พบสินค้าในรายการ</div>';
 }
 function addToCart(id,mode='base'){
  let p=products.find(x=>x.id===id);if(!p)return;
- mode=mode==='pack'?'pack':'base';
+ mode=(mode==='pack'||mode===1)?'pack':'base';
  const base=p.base_unit||'ชิ้น',pack=p.pack_unit||'ลัง',packQty=Math.max(1,Number(p.pack_qty)||1);
  if(mode==='pack'&&(p.pack_price===null||p.pack_price===undefined||!Number.isFinite(Number(p.pack_price))||pack===base||packQty<=1)){toast('สินค้านี้ยังไม่ได้ตั้งค่าราคาขายแบบแพ็ก');return}
  const unit=mode==='pack'?pack:base,stockQty=mode==='pack'?packQty:1,price=mode==='pack'?Number(p.pack_price):Number(p.price);
@@ -278,7 +278,7 @@ function clearCart(){cart=[];cartRequestId=null;document.getElementById('discoun
 function totals(){let sub=cart.reduce((a,c)=>a+c.price*c.qty,0),disc=Math.max(0,Math.min(sub,Number(document.getElementById('discountInput').value)||0));return{sub,disc,total:sub-disc}}
 function renderCart(){
  let el=document.getElementById('cartItems');
- el.innerHTML=cart.length?cart.map(c=>`<div class='cart-item'><div><div class='ci-name'>${escapeHtml(c.name)} · ${escapeHtml(c.unit||'ชิ้น')}</div><div class='ci-price'>${money(c.price)} × ${c.qty} = <b>${money(c.price*c.qty)}</b><br><span class='sub'>ตัดสต็อก ${c.qty*c.stockQty} ${escapeHtml(c.baseUnit||'หน่วยย่อย')}</span></div></div><div class='qty'><button onclick='changeQty(${c.id},\'${c.mode||'base'}\',-1)'>−</button><span>${c.qty}</span><button onclick='changeQty(${c.id},\'${c.mode||'base'}\',1)'>＋</button></div></div>`).join(''):'<div class=empty>ยังไม่มีสินค้าในตะกร้า<br>เลือกสินค้าจากรายการด้านซ้าย</div>';
+ el.innerHTML=cart.length?cart.map(c=>`<div class='cart-item'><div><div class='ci-name'>${escapeHtml(c.name)} · ${escapeHtml(c.unit||'ชิ้น')}</div><div class='ci-price'>${money(c.price)} × ${c.qty} = <b>${money(c.price*c.qty)}</b><br><span class='sub'>ตัดสต็อก ${c.qty*c.stockQty} ${escapeHtml(c.baseUnit||'หน่วยย่อย')}</span></div></div><div class='qty'><button onclick='changeQty(${c.id},${c.mode==='pack'?1:0},-1)'>−</button><span>${c.qty}</span><button onclick='changeQty(${c.id},${c.mode==='pack'?1:0},1)'>＋</button></div></div>`).join(''):'<div class=empty>ยังไม่มีสินค้าในตะกร้า<br>เลือกสินค้าจากรายการด้านซ้าย</div>';
  let t=totals();document.getElementById('cartCount').textContent=cart.reduce((a,c)=>a+c.qty,0)+' หน่วยขาย';document.getElementById('subtotal').textContent=money(t.sub);document.getElementById('grandTotal').textContent=money(t.total);document.getElementById('checkoutBtn').disabled=!cart.length||t.total<=0||cloudBooting;let previewBtn=document.getElementById('previewBillBtn');if(previewBtn)previewBtn.disabled=!cart.length||cloudBooting;
 }
 function openModal(title,body){document.getElementById('modalTitle').textContent=title;document.getElementById('modalBody').innerHTML=body;document.getElementById('genericModal').classList.add('show')}
