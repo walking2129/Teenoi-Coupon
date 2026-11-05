@@ -357,9 +357,25 @@ async function loadZXing(){
  return window._zxingLoadPromise;
 }
 let scannerAnimationFrame=null;
+let scanAudioContext=null;
+function playScanBeep(){
+ try{
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  if(!AudioCtx)return;
+  if(!scanAudioContext)scanAudioContext=new AudioCtx();
+  if(scanAudioContext.state==='suspended')scanAudioContext.resume();
+  const ctx=scanAudioContext,osc=ctx.createOscillator(),gain=ctx.createGain(),now=ctx.currentTime;
+  osc.type='square';osc.frequency.setValueAtTime(880,now);
+  gain.gain.setValueAtTime(0.0001,now);
+  gain.gain.exponentialRampToValueAtTime(0.16,now+0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001,now+0.13);
+  osc.connect(gain);gain.connect(ctx.destination);osc.start(now);osc.stop(now+0.14);
+ }catch(e){/* เสียงเป็นส่วนเสริม หากอุปกรณ์ไม่รองรับให้สแกนต่อได้ */}
+}
 function handleScannedBarcode(raw){
  if(!scanActive||!raw||raw===lastCode)return;
  lastCode=raw;
+ playScanBeep();
  const input=document.getElementById('manualBarcode');
  if(input)input.value=raw;
  stopScanner();
