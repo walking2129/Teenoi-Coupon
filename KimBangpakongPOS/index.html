@@ -372,10 +372,13 @@ function playScanBeep(){
   osc.connect(gain);gain.connect(ctx.destination);osc.start(now);osc.stop(now+0.14);
  }catch(e){/* เสียงเป็นส่วนเสริม หากอุปกรณ์ไม่รองรับให้สแกนต่อได้ */}
 }
+let scannerAudioContext=null;
+function prepareScannerAudio(){try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;if(!scannerAudioContext)scannerAudioContext=new AC();if(scannerAudioContext.state==='suspended')scannerAudioContext.resume().catch(()=>{});}catch(e){}}
+function playScannerBeep(){try{if(!scannerAudioContext)return;const ctx=scannerAudioContext;if(ctx.state==='suspended')ctx.resume().catch(()=>{});const t=ctx.currentTime;const osc=ctx.createOscillator();const gain=ctx.createGain();osc.type='sine';osc.frequency.setValueAtTime(1900,t);gain.gain.setValueAtTime(0.0001,t);gain.gain.exponentialRampToValueAtTime(0.2,t+0.008);gain.gain.exponentialRampToValueAtTime(0.0001,t+0.13);osc.connect(gain);gain.connect(ctx.destination);osc.start(t);osc.stop(t+0.14);}catch(e){}}
 function handleScannedBarcode(raw){
  if(!scanActive||!raw||raw===lastCode)return;
  lastCode=raw;
- playScanBeep();
+ playScannerBeep();
  const input=document.getElementById('manualBarcode');
  if(input)input.value=raw;
  stopScanner();
@@ -394,6 +397,7 @@ async function startScanner(){
   return;
  }
  stopScanner();
+ prepareScannerAudio();
  lastCode='';lastScanAt=0;scanLastSeen=0;
  try{
   status.textContent='กำลังขออนุญาตใช้กล้อง...';
