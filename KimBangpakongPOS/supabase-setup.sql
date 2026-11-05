@@ -193,6 +193,83 @@ begin
 end;
 $$;
 
+create or replace function public.pos_save_product(
+  p_store_id uuid,
+  p_product jsonb,
+  p_expected_updated_at timestamptz default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $
+declare
+  v_product public.pos_products%rowtype;
+  v_id bigint;
+  v_name text;
+  v_barcode text;
+  v_price numeric(14,2);
+  v_stock integer;
+  v_category text;
+begin
+  if auth.uid() is null or not exists (
+    select 1 from public.pos_members
+    where store_id = p_store_id and user_id = auth.uid()
+  ) then
+    raise exception 'บัญชีนี้ไม่มีสิทธิ์เข้าถึงร้านนี้';
+  end if;
+
+  v_id := (p_product->>'id')::bigint;
+  v_name := nullif(trim(p_product->>'name'), '');
+  v_barcode := coalesce(p_product->>'barcode', '');
+  v_price := coalesce((p_product->>'price')::numeric, -1);
+  v_stock := coalesce((p_product->>'stock')::integer, -1);
+  v_category := coalesce(nullif(trim(p_product->>'category'), ''), 'อื่นๆ');
+
+  if v_name is null then raise exception 'กรุณาระบุชื่อสินค้า'; end if;
+  if v_price < 0 then raise exception 'ราคาสินค้าไม่ถูกต้อง'; end if;
+  if v_stock < 0 then raise exception 'จำนวนสต็อกไม่ถูกต้อง'; end if;
+
+  if p_expected_updated_at is null then
+    insert into public.pos_products (
+      store_id, id, name, barcode, price, stock, category, updated_at
+    ) values (
+      p_store_id, v_id, v_name, v_barcode, v_price, v_stock,
+      v_category, clock_timestamp()
+    )
+    returning * into v_product;
+  else
+    select * into v_product
+    from public.pos_products
+    where store_id = p_store_id and id = v_id
+    for update;
+
+    if not found then
+      raise exception 'สินค้านี้ถูกลบจากอีกเครื่องแล้ว กรุณาโหลดรายการใหม่';
+    end if;
+
+    if v_product.updated_at <> p_expected_updated_at then
+      raise exception 'มีการแก้ไขหรือขายสินค้านี้จากอีกเครื่อง กรุณาปิดแล้วเปิดหน้าแก้ไขใหม่ เพื่อไม่ให้สต็อกทับกัน';
+    end if;
+
+    update public.pos_products
+       set name = v_name,
+           barcode = v_barcode,
+           price = v_price,
+           stock = v_stock,
+           category = v_category,
+           updated_at = clock_timestamp()
+     where store_id = p_store_id and id = v_id
+     returning * into v_product;
+  end if;
+
+  return jsonb_build_object(
+    'id', v_product.id,
+    'updated_at', v_product.updated_at
+  );
+end;
+$;
+
 create or replace function public.pos_complete_sale(
   p_store_id uuid,
   p_sale jsonb
@@ -327,9 +404,12 @@ begin
 end;
 $$;
 
+revoke insert, update on public.pos_products from authenticated;
 revoke all on function public.pos_import_legacy(uuid, jsonb, jsonb) from public, anon;
+revoke all on function public.pos_save_product(uuid, jsonb, timestamptz) from public, anon;
 revoke all on function public.pos_complete_sale(uuid, jsonb) from public, anon;
 grant execute on function public.pos_import_legacy(uuid, jsonb, jsonb) to authenticated;
+grant execute on function public.pos_save_product(uuid, jsonb, timestamptz) to authenticated;
 grant execute on function public.pos_complete_sale(uuid, jsonb) to authenticated;
 
 -- Create user accounts in Authentication > Users first, then add each account
