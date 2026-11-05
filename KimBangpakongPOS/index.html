@@ -267,6 +267,7 @@ function addToCart(id,mode='base'){
  c.qty++;renderCart();
 }
 function changeQty(id,mode,n){
+ mode=(mode==='pack'||mode===1)?'pack':'base';
  let c=cart.find(x=>x.id===id&&(x.mode||'base')===mode),p=products.find(x=>x.id===id);if(!c||!p)return;
  const next=c.qty+n,required=cart.filter(x=>x.id===id).reduce((sum,x)=>sum+(x===c?Math.max(0,next):x.qty)*(Number(x.stockQty)||1),0);
  if(next<=0)cart=cart.filter(x=>x!==c);
