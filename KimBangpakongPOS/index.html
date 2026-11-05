@@ -74,7 +74,7 @@ function mapCloudSale(s){
 async function fetchCloudData(){
  if(!supabaseClient)throw new Error('ยังไม่ได้ตั้งค่าการเชื่อมต่อฐานข้อมูล');
  const [pr,sr]=await Promise.all([
-  supabaseClient.from('pos_products').select('id,name,barcode,price,stock,category').eq('store_id',POS_STORE_ID).order('id',{ascending:true}),
+  supabaseClient.from('pos_products').select('id,name,barcode,price,stock,category,updated_at').eq('store_id',POS_STORE_ID).order('id',{ascending:true}),
   supabaseClient.from('pos_sales').select('id,date,items,customer_name,subtotal,discount,total,method,received,change').eq('store_id',POS_STORE_ID).order('date',{ascending:false}).limit(1000)
  ]);
  if(pr.error)throw pr.error;
@@ -180,7 +180,7 @@ function totals(){let sub=cart.reduce((a,c)=>a+c.price*c.qty,0),disc=Math.max(0,
 function renderCart(){let el=document.getElementById('cartItems');el.innerHTML=cart.length?cart.map(c=>`<div class="cart-item"><div><div class="ci-name">${escapeHtml(c.name)}</div><div class="ci-price">${money(c.price)} × ${c.qty} = <b>${money(c.price*c.qty)}</b></div></div><div class="qty"><button onclick="changeQty(${c.id},-1)">−</button><span>${c.qty}</span><button onclick="changeQty(${c.id},1)">＋</button></div></div>`).join(''):'<div class="empty">ยังไม่มีสินค้าในตะกร้า<br>เลือกสินค้าจากรายการด้านซ้าย</div>';let t=totals();document.getElementById('cartCount').textContent=cart.reduce((a,c)=>a+c.qty,0)+' ชิ้น';document.getElementById('subtotal').textContent=money(t.sub);document.getElementById('grandTotal').textContent=money(t.total);document.getElementById('checkoutBtn').disabled=!cart.length||t.total<=0||cloudBooting}
 function openModal(title,body){document.getElementById('modalTitle').textContent=title;document.getElementById('modalBody').innerHTML=body;document.getElementById('genericModal').classList.add('show')}
 function closeModal(){document.getElementById('genericModal').classList.remove('show');stopScanner()}
-function openAddProduct(id=null){editingId=id;let p=id?products.find(x=>x.id===id):{name:'',barcode:'',price:'',stock:'',category:'อื่นๆ'};openModal(id?'แก้ไขสินค้า':'เพิ่มสินค้าใหม่',`<form onsubmit="saveProduct(event)"><div class="field"><label>ชื่อสินค้า *</label><input id="fName" required value="${escapeHtml(p.name)}" placeholder="เช่น น้ำดื่ม 600 มล."></div><div class="field"><label>รหัสบาร์โค้ด</label><input id="fBarcode" value="${escapeHtml(p.barcode||'')}" placeholder="สแกนหรือพิมพ์รหัสสินค้า"></div><div class="fieldgrid"><div class="field"><label>ราคาขาย (บาท) *</label><input id="fPrice" required type="number" min="0" step="0.01" value="${p.price}"></div><div class="field"><label>จำนวนคงเหลือ</label><input id="fStock" type="number" min="0" step="1" value="${p.stock}"></div></div><div class="field"><label>หมวดหมู่</label><input id="fCategory" value="${escapeHtml(p.category||'อื่นๆ')}"></div><div class="modal-actions"><button type="button" class="btn btn-light" onclick="closeModal()">ยกเลิก</button><button class="btn btn-primary">บันทึกสินค้า</button></div></form>`)}
+function openAddProduct(id=null){editingId=id;let p=id?products.find(x=>x.id===id):{name:'',barcode:'',price:'',stock:'',category:'อื่นๆ'};openModal(id?'แก้ไขสินค้า':'เพิ่มสินค้าใหม่',`<form onsubmit="saveProduct(event)"><input type="hidden" id="fUpdatedAt" value="${escapeHtml(p.updated_at)}"><div class="field"><label>ชื่อสินค้า *</label><input id="fName" required value="${escapeHtml(p.name)}" placeholder="เช่น น้ำดื่ม 600 มล."></div><div class="field"><label>รหัสบาร์โค้ด</label><input id="fBarcode" value="${escapeHtml(p.barcode||'')}" placeholder="สแกนหรือพิมพ์รหัสสินค้า"></div><div class="fieldgrid"><div class="field"><label>ราคาขาย (บาท) *</label><input id="fPrice" required type="number" min="0" step="0.01" value="${p.price}"></div><div class="field"><label>จำนวนคงเหลือ</label><input id="fStock" type="number" min="0" step="1" value="${p.stock}"></div></div><div class="field"><label>หมวดหมู่</label><input id="fCategory" value="${escapeHtml(p.category||'อื่นๆ')}"></div><div class="modal-actions"><button type="button" class="btn btn-light" onclick="closeModal()">ยกเลิก</button><button class="btn btn-primary">บันทึกสินค้า</button></div></form>`)}
 async function saveProduct(e){
  e.preventDefault();
  if(cloudBooting){toast('กำลังเชื่อมต่อฐานข้อมูลกลาง กรุณาลองอีกครั้ง');return}
@@ -189,6 +189,14 @@ async function saveProduct(e){
  if(editingId)p.id=Number(editingId);else p.id=Date.now()*1000+Math.floor(Math.random()*999);
  try{
   if(cloudAuthenticated){
+   if(editingId){
+    const baseline=document.getElementById('fUpdatedAt')?.value||'';
+    const {data:current,error:readError}=await supabaseClient.from('pos_products').select('updated_at').eq('store_id',POS_STORE_ID).eq('id',p.id).maybeSingle();
+    if(readError)throw readError;
+    if(!current)throw new Error('สินค้านี้ถูกลบจากอีกเครื่องแล้ว กรุณาปิดหน้าต่างแล้วโหลดรายการใหม่');
+    if(!baseline||current.updated_at!==baseline)throw new Error('มีการแก้ไขหรือขายสินค้านี้จากอีกเครื่องระหว่างที่คุณเปิดหน้าแก้ไข กรุณาปิดแล้วเปิดแก้ไขใหม่ เพื่อไม่ให้สต็อกทับกัน');
+   }
+   p.updated_at=new Date().toISOString();
    const {error}=await supabaseClient.from('pos_products').upsert({...p,store_id:POS_STORE_ID},{onConflict:'store_id,id'});
    if(error)throw error;
   }
