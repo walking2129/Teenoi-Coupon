@@ -235,8 +235,8 @@ begin
     );
   end if;
 
-  if jsonb_typeof(p_sale->'items') <> 'array'
-     or jsonb_array_length(p_sale->'items') = 0 then
+  if coalesce(jsonb_typeof(p_sale->'items'), 'null') <> 'array'
+     or jsonb_array_length(coalesce(p_sale->'items', '[]'::jsonb)) = 0 then
     raise exception 'ไม่มีสินค้าในบิล';
   end if;
 
@@ -258,7 +258,7 @@ begin
     for update;
 
     if not found then
-      raise exception 'ไม่พบสินค้าในฐานข้อมูลกลาง (รหัส %) ', v_item->>'id';
+      raise exception 'ไม่พบสินค้าในฐานข้อมูลกลาง (รหัส %) ', (v_item->>'id');
     end if;
     if v_product.stock < v_qty then
       raise exception 'สต็อกไม่พอ: % (เหลือ %)', v_product.name, v_product.stock;
@@ -280,7 +280,9 @@ begin
   ));
   v_total := v_subtotal - v_discount;
   v_method := coalesce(nullif(p_sale->>'method',''), 'เงินสด');
-  v_received := coalesce((p_sale->>'received')::numeric, v_total);
+  v_received := case when v_method = 'เงินสด'
+    then coalesce((p_sale->>'received')::numeric, v_total)
+    else v_total end;
   v_customer := coalesce(p_sale->>'customerName', '');
 
   if v_method = 'เงินสด' and v_received < v_total then
