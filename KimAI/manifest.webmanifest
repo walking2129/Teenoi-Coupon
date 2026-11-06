@@ -1,0 +1,11 @@
+{
+  "name": "Kim AI",
+  "short_name": "Kim AI",
+  "description": "พื้นที่ทำงาน AI ส่วนตัวของคิม",
+  "lang": "th",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101116",
+  "theme_color": "#101116"
+}
