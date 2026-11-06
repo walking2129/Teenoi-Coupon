@@ -41,13 +41,13 @@ module.exports = async function handler(req, res) {
     modeInstruction +
     " ห้ามกล่าวอ้างว่าเชื่อมต่อเครื่องมือหรือทำธุรกรรมสำเร็จ หากระบบไม่ได้เชื่อมต่อเครื่องมือนั้นจริง";
 
-  const model = process.env.OPENAI_MODEL || body.model || "gpt-5";
+  const model = process.env.OPENAI_MODEL || body.model || "gpt-6-astra";
   let upstream;
   try {
     upstream = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { "Authorization": "Bearer " + apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, instructions, input: messages })
+      body: JSON.stringify({ model, instructions, input: messages, reasoning: { effort: "high" } })
     });
   } catch (error) {
     return res.status(502).json({ error: "เชื่อมต่อผู้ให้บริการ AI ไม่สำเร็จ: " + error.message });
