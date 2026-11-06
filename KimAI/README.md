@@ -28,7 +28,7 @@ Configure these environment variables on the backend host:
 
 - `OPENAI_API_KEY` — secret provider API key. Never put it in browser JavaScript or this public repository.
 - `KIM_AI_ACCESS_CODE` — a long random password used by the app to call your backend.
-- `OPENAI_MODEL` — optional model name enabled for your API project. Defaults to `gpt-5`.
+- `OPENAI_MODEL` — optional model name enabled for your API project. Defaults to `gpt-6-astra`.
 - `ALLOWED_ORIGIN` — optional allowed front-end origin. Defaults to `https://walking2129.github.io`.
 
 Then open Kim AI, choose Settings, and enter:
