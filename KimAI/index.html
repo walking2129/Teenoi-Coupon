@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="th"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101116"><title>Kim AI</title>
+<link rel="stylesheet" href="styles.css"><link rel="manifest" href="manifest.webmanifest">
+</head><body>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="brand"><b class="logo">K</b><strong>Kim AI</strong><small>PREVIEW</small></div>
+  <button class="new" id="new">＋ แชตใหม่</button>
+  <input class="search" id="search" placeholder="ค้นหาแชต">
+  <div class="label">ประวัติการสนทนา</div><div id="history" class="history"><p class="muted">ยังไม่มีแชต</p></div>
+  <div class="profile"><b>K</b><span>คิม<small>พื้นที่ทำงานส่วนตัว</small></span></div>
+</aside>
+<main class="main">
+<header><button id="menu" class="menu">☰</button><b>Kim AI</b><span class="context" id="context">/ แชตใหม่</span><div class="spacer"></div><span id="status" class="status">● ยังไม่เชื่อมต่อ AI</span><button id="settings" class="settingsbtn">⚙ ตั้งค่า</button></header>
+<section id="workspace" class="workspace">
+<div id="welcome" class="welcome">
+<div class="orb">K</div><small class="eyebrow">YOUR PERSONAL AI WORKSPACE</small>
+<h1>สวัสดีคิม<br><span>วันนี้ให้ Kim AI ช่วยอะไรดี?</span></h1>
+<p>ผู้ช่วย AI ส่วนตัวสำหรับวางแผน วิเคราะห์ เขียนโปรแกรม และต่อยอดสู่การทำงานอัตโนมัติ</p>
+<div class="suggestions">
+<button data-prompt="ช่วยวางแผนงานนี้เป็นขั้นตอน พร้อมระบุเครื่องมือและผลลัพธ์ที่ต้องได้"><b>✧</b><strong>วางแผนงาน</strong><small>แตกงานใหญ่เป็นขั้นตอน</small></button>
+<button data-prompt="ช่วยวิเคราะห์ข้อมูลนี้อย่างเป็นระบบ สรุปประเด็น ความเสี่ยง และข้อเสนอแนะ"><b>⌁</b><strong>วิเคราะห์ข้อมูล</strong><small>หาเหตุผลและสรุปผล</small></button>
+<button data-prompt="ช่วยเขียนโค้ดสำหรับงานนี้ พร้อมวิธีทดสอบ"><b>{ }</b><strong>เขียนโปรแกรม</strong><small>สร้างและตรวจสอบโค้ด</small></button>
+<button data-prompt="ช่วยออกแบบ AI Agent สำหรับทำงานอัตโนมัติ"><b>↗</b><strong>ทำงานอัตโนมัติ</strong><small>ออกแบบเวิร์กโฟลว์ AI</small></button>
+</div><small class="hint">เชื่อมต่อ AI Backend ในตั้งค่าก่อนเริ่มสนทนาจริง</small>
+</div>
+<div id="chat" class="chat hidden"><div id="messages"></div></div>
+</section>
+<footer>
+<div class="modebar">✧ <select id="mode"><option value="chat">แชต</option><option value="agent">Agent · วางแผนงาน</option><option value="code">เขียนโค้ด</option></select><span id="modehint">โหมดสนทนาทั่วไป</span></div>
+<form id="form"><button type="button" id="attach" title="แนบไฟล์ข้อความ">＋</button><input type="file" id="file" hidden accept=".txt,.md,.csv,.json,.js,.ts,.py,.html,.css,.sql"><textarea id="input" rows="1" placeholder="ส่งข้อความถึง Kim AI..."></textarea><button type="button" id="voice" title="ป้อนข้อความด้วยเสียง">♩</button><button type="submit" class="send" id="send">↑</button><button type="button" id="stop" class="hidden">■</button></form>
+<div class="footnote"><span id="attached"></span><span>AI อาจตอบผิดพลาด · ตรวจสอบข้อมูลสำคัญก่อนใช้</span></div>
+</footer>
+</main></div>
+<dialog id="dialog"><section class="dialogbox"><h2>ตั้งค่า Kim AI</h2><p>เชื่อมต่อเซิร์ฟเวอร์ AI โดยเก็บ API key ไว้บน Backend เท่านั้น</p>
+<label>Backend URL<input id="backend" placeholder="https://your-kim-ai-backend.vercel.app"></label>
+<label>รหัสเข้าใช้งาน<input id="access" type="password" placeholder="KIM_AI_ACCESS_CODE"></label>
+<label>ชื่อโมเดล<input id="model" value="gpt-5"></label>
+<p class="security">ห้ามใส่ API key ในหน้าเว็บหรือ commit ลง GitHub ให้ตั้งเป็น Environment Variable บนเซิร์ฟเวอร์</p>
+<div class="dialogactions"><button id="test" type="button">ทดสอบ</button><button id="clear" type="button">ล้าง</button><button id="save" type="button" class="primary">บันทึก</button></div>
+</section></dialog>
+<script src="app.js" defer></script></body></html>
