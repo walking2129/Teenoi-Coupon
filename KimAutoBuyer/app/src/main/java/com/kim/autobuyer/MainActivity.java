@@ -223,6 +223,9 @@ public class MainActivity extends Activity {
                 .putBoolean("running", true).putInt("step", 0)
                 .putLong("passport_clicked_at", 0L)
                 .putInt("passport_attempts", 0)
+                .putInt("form_scrolls", 0)
+                .putBoolean("dob_filled", false)
+                .putBoolean("referrer_filled", false)
                 .putString("target_package", pkg)
                 .putString("status", "กำลังเปิด Makro PRO").apply();
         Intent launch = getPackageManager().getLaunchIntentForPackage(pkg);
