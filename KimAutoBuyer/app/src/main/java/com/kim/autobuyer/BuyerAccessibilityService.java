@@ -1,10 +1,14 @@
 package com.kim.autobuyer;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.GestureDescription;
+import android.graphics.Path;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
+import android.util.DisplayMetrics;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.Toast;
@@ -30,17 +34,17 @@ public class BuyerAccessibilityService extends AccessibilityService {
     @Override
     public void onServiceConnected() {
         super.onServiceConnected();
-        scheduleTick(500);
+        scheduleTick(600);
     }
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (isRunning()) scheduleTick(350);
+        if (isRunning()) scheduleTick(450);
     }
 
     @Override
     public void onInterrupt() {
-        setStatus("ระบบ Accessibility ถูกหยุดชั่วคราว");
+        setStatus("Accessibility ถูกหยุดชั่วคราว");
     }
 
     @Override
@@ -70,14 +74,14 @@ public class BuyerAccessibilityService extends AccessibilityService {
         if (!isRunning()) return;
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) {
-            scheduleTick(900);
+            scheduleTick(1000);
             return;
         }
 
         String pkg = root.getPackageName() == null ? "" : root.getPackageName().toString();
         String target = state().getString("target_package", "");
         if (!target.isEmpty() && !target.equals(pkg)) {
-            // Android only exposes an actionable accessibility tree for the foreground window.
+            setStatus("กำลังรอ Makro PRO อยู่ด้านหน้า");
             scheduleTick(1200);
             return;
         }
@@ -93,6 +97,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
         }
 
         int step = state().getInt("step", PHONE);
+        saveScreenDiagnostics(root, step);
         switch (step) {
             case PHONE:
                 doPhone(root);
@@ -110,96 +115,138 @@ public class BuyerAccessibilityService extends AccessibilityService {
                 doPassport(root);
                 break;
             default:
-                state().edit().putBoolean("running", false).putString("status",
-                        "ถึงหน้า Passport แล้ว").apply();
+                state().edit().putBoolean("running", false)
+                        .putString("status", "จบขั้นตอนที่กำหนดแล้ว").apply();
                 break;
         }
 
-        if (isRunning()) scheduleTick(750);
+        if (isRunning()) scheduleTick(850);
     }
 
+    // Step 1: open the top-right Login entry on the Makro home screen,
+    // then fill the phone/email form once it appears.
     private void doPhone(AccessibilityNodeInfo root) {
         if (hasPasswordField(root) || hasAny(root, "password", "รหัสผ่าน")) {
-            setStep(PASSWORD, "พบหน้ากรอกรหัสผ่าน");
+            setStep(PASSWORD, "พบหน้ารหัสผ่าน");
             return;
         }
-        if (!hasAny(root, "mobile number", "phone number", "email", "เบอร์โทร",
-                "หมายเลขมือถือ", "อีเมล", "เข้าสู่ระบบ", "log in", "login")) return;
 
-        String phone = readCredentials("phone");
-        if (phone.isEmpty()) {
-            stopWith("ไม่พบเบอร์โทร/อีเมลที่บันทึกไว้");
+        boolean phoneForm = hasAny(root, "mobile number", "phone number", "email address",
+                "enter phone", "เบอร์โทร", "หมายเลขมือถือ", "อีเมล", "เบอร์โทรศัพท์");
+        AccessibilityNodeInfo field = findEditable(root, false);
+        if (phoneForm || (field != null && hasAny(root, "continue", "ดำเนินการต่อ", "ถัดไป"))) {
+            String phone = readCredentials("phone");
+            if (phone.isEmpty()) {
+                stopWith("ไม่พบเบอร์โทร/อีเมลที่บันทึกไว้");
+                return;
+            }
+            if (field != null) setNodeText(field, phone);
+            if (clickAction(root, new String[]{"continue", "ดำเนินการต่อ", "ถัดไป", "ยืนยัน"}, true)) {
+                setStep(PASSWORD, "กรอกเบอร์/อีเมลแล้ว กด Continue แล้ว กำลังรอหน้ารหัสผ่าน");
+            } else {
+                setStatus("กรอกเบอร์แล้ว แต่ยังหาปุ่ม Continue ไม่พบ — เก็บหน้าจอไว้ตรวจสอบ");
+            }
             return;
         }
-        AccessibilityNodeInfo field = findEditable(root, false);
-        if (field != null) setNodeText(field, phone);
-        AccessibilityNodeInfo next = findText(root, "continue", "ดำเนินการต่อ");
-        if (next != null && clickNode(next)) {
-            setStep(PASSWORD, "กรอกเบอร์/อีเมลแล้ว กำลังรอหน้ารหัสผ่าน");
+
+        if (clickAction(root, new String[]{"login", "log in", "sign in", "เข้าสู่ระบบ",
+                "ลงชื่อเข้าใช้", "ล็อกอิน"}, false)) {
+            setStatus("กดทางเข้า Login แล้ว กำลังรอหน้ากรอกเบอร์/อีเมล");
+            return;
+        }
+
+        // Some home-screen builds expose the top-right Login control without a label.
+        if (tapTopRightLogin(root)) {
+            setStatus("แตะบริเวณปุ่ม Login มุมขวาบนแล้ว กำลังรอหน้ากรอกเบอร์/อีเมล");
         }
     }
 
     private void doPassword(AccessibilityNodeInfo root) {
-        if (hasAny(root, "apply for makro card", "สมัคร makro card")) {
+        if (hasAny(root, "apply for makro card", "สมัคร makro card", "สมัครบัตรแม็คโคร")) {
             setStep(CARD, "เข้าสู่ระบบแล้ว");
             return;
         }
         if (!hasPasswordField(root) && !hasAny(root, "password", "รหัสผ่าน")) return;
+
         String password = readCredentials("password");
         if (password.isEmpty()) {
             stopWith("ไม่พบรหัสผ่านที่บันทึกไว้");
             return;
         }
         AccessibilityNodeInfo field = findEditable(root, true);
-        if (field == null) return;
-        setNodeText(field, password);
-        AccessibilityNodeInfo login = findLoginButton(root);
-        if (login != null && clickNode(login)) {
-            setStep(CARD, "ส่งคำสั่งเข้าสู่ระบบแล้ว กำลังรอหน้าแรก");
+        if (field != null) setNodeText(field, password);
+
+        if (clickAction(root, new String[]{"login", "log in", "sign in", "เข้าสู่ระบบ",
+                "ลงชื่อเข้าใช้", "ล็อกอิน"}, true)) {
+            setStep(CARD, "กรอกรหัสผ่านแล้ว กด Login แล้ว กำลังรอหน้าแรก");
+        } else {
+            setStatus("กรอกรหัสผ่านแล้ว แต่ยังหาปุ่ม Login ไม่พบ");
         }
     }
 
     private void doCard(AccessibilityNodeInfo root) {
         AccessibilityNodeInfo apply = findText(root,
                 "apply for makro card", "สมัคร makro card", "สมัครบัตรแม็คโคร");
-        if (apply != null && clickNode(apply)) {
-            setStep(PERSONAL, "เลือกเมนูสมัคร Makro Card แล้ว");
+        if (apply != null && clickNodeOrTap(apply)) {
+            setStep(PERSONAL, "กดเมนูสมัคร Makro Card แล้ว");
             return;
         }
         if (hasAny(root, "personal", "บุคคลธรรมดา") &&
                 hasAny(root, "passport", "หนังสือเดินทาง")) {
-            setStep(PERSONAL, "พบหน้าเลือกประเภทข้อมูล");
+            setStep(PERSONAL, "พบหน้าตัวเลือก Personal และ Passport");
         }
     }
 
     private void doPersonal(AccessibilityNodeInfo root) {
-        if (hasAny(root, "passport", "หนังสือเดินทาง") &&
-                !hasAny(root, "select type", "choose type", "เลือกประเภท")) {
-            setStep(PASSPORT, "พบตัวเลือก Passport");
+        // The old implementation jumped straight to PASSPORT whenever the word
+        // "Passport" was visible, even when Personal and Passport were both options.
+        AccessibilityNodeInfo personal = findText(root, "personal", "บุคคลธรรมดา");
+        if (personal != null) {
+            if (clickNodeOrTap(personal)) {
+                setStep(PASSPORT, "เลือก Personal แล้ว กำลังหาตัวเลือก Passport");
+            } else {
+                setStatus("พบ Personal แต่แตะเลือกไม่สำเร็จ");
+            }
             return;
         }
-        AccessibilityNodeInfo personal = findText(root, "personal", "บุคคลธรรมดา");
-        if (personal != null && clickNode(personal)) {
-            setStep(PASSPORT, "เลือก Personal แล้ว กำลังรอตัวเลือก Passport");
+        if (hasAny(root, "passport", "หนังสือเดินทาง")) {
+            setStep(PASSPORT, "พบหน้าหรือรายการเลือก Passport");
         }
     }
 
     private void doPassport(AccessibilityNodeInfo root) {
-        long clickedAt = state().getLong("passport_clicked_at", 0L);
-        if (clickedAt > 0L) {
-            if (System.currentTimeMillis() - clickedAt > 1800L) {
-                state().edit().putBoolean("running", false)
-                        .putInt("step", DONE)
-                        .putString("status", "ถึงหน้า Passport แล้ว ระบบหยุดตามที่กำหนด").apply();
-                Toast.makeText(this, "ถึงหน้า Passport แล้ว", Toast.LENGTH_LONG).show();
-            }
+        if (isPassportForm(root)) {
+            state().edit().putBoolean("running", false).putInt("step", DONE)
+                    .putString("status", "ยืนยันแล้วว่าเปิดหน้าแบบฟอร์ม Passport").apply();
+            Toast.makeText(this, "ถึงหน้าแบบฟอร์ม Passport แล้ว", Toast.LENGTH_LONG).show();
             return;
         }
-        AccessibilityNodeInfo passport = findText(root, "passport", "หนังสือเดินทาง");
-        if (passport != null && clickNode(passport)) {
-            state().edit().putLong("passport_clicked_at", System.currentTimeMillis())
-                    .putString("status", "เลือก Passport แล้ว กำลังรอหน้าแบบฟอร์ม").apply();
+
+        long clickedAt = state().getLong("passport_clicked_at", 0L);
+        int attempts = state().getInt("passport_attempts", 0);
+        if (clickedAt > 0L && System.currentTimeMillis() - clickedAt < 2500L) return;
+        if (clickedAt > 0L && attempts >= 4) {
+            stopWith("พบคำว่า Passport แต่ยืนยันการเปิดแบบฟอร์มไม่ได้ กรุณาตรวจหน้าจอ");
+            return;
         }
+
+        AccessibilityNodeInfo passport = findText(root, "passport", "หนังสือเดินทาง");
+        if (passport != null && clickNodeOrTap(passport)) {
+            state().edit()
+                    .putLong("passport_clicked_at", System.currentTimeMillis())
+                    .putInt("passport_attempts", attempts + 1)
+                    .putString("status", "แตะเลือก Passport แล้ว กำลังตรวจว่าฟอร์มเปิดจริงหรือไม่")
+                    .apply();
+        } else {
+            setStatus("ยังไม่พบปุ่ม/ตัวเลือก Passport ที่แตะได้");
+        }
+    }
+
+    private boolean isPassportForm(AccessibilityNodeInfo root) {
+        return hasAny(root, "passport number", "passport no", "passport details",
+                "เลขที่หนังสือเดินทาง", "หมายเลขหนังสือเดินทาง",
+                "วันหมดอายุหนังสือเดินทาง", "passport expiry", "date of expiry",
+                "issuing country", "ประเทศที่ออกหนังสือเดินทาง");
     }
 
     private boolean hasPasswordField(AccessibilityNodeInfo root) {
@@ -232,7 +279,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
     }
 
     private void collectEditable(AccessibilityNodeInfo n, List<AccessibilityNodeInfo> out, int depth) {
-        if (n == null || depth > 35) return;
+        if (n == null || depth > 40) return;
         if (n.isEditable()) out.add(n);
         for (int i = 0; i < n.getChildCount(); i++) collectEditable(n.getChild(i), out, depth + 1);
     }
@@ -245,22 +292,17 @@ public class BuyerAccessibilityService extends AccessibilityService {
         return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
     }
 
-    private AccessibilityNodeInfo findLoginButton(AccessibilityNodeInfo root) {
-        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
-        collectNodes(root, nodes, 0);
-        for (AccessibilityNodeInfo n : nodes) {
-            String t = textOf(n).toLowerCase(Locale.ROOT).trim();
-            if (t.contains("otp") || t.contains("one time password")) continue;
-            if (t.equals("login") || t.equals("log in") || t.equals("เข้าสู่ระบบ") ||
-                    t.equals("ลงชื่อเข้าใช้") || t.equals("ล็อกอิน")) return n;
-        }
-        return null;
+    private boolean clickAction(AccessibilityNodeInfo root, String[] matches, boolean bottomFallback) {
+        AccessibilityNodeInfo target = findText(root, matches);
+        if (target != null && clickNodeOrTap(target)) return true;
+        return bottomFallback && tapBottomButton(root);
     }
 
     private AccessibilityNodeInfo findText(AccessibilityNodeInfo root, String... matches) {
         List<AccessibilityNodeInfo> nodes = new ArrayList<>();
         collectNodes(root, nodes, 0);
         for (AccessibilityNodeInfo n : nodes) {
+            if (!n.isVisibleToUser()) continue;
             String t = textOf(n).toLowerCase(Locale.ROOT).trim();
             if (t.isEmpty()) continue;
             for (String m : matches) {
@@ -276,7 +318,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
     }
 
     private void collectNodes(AccessibilityNodeInfo n, List<AccessibilityNodeInfo> out, int depth) {
-        if (n == null || depth > 35) return;
+        if (n == null || depth > 40) return;
         out.add(n);
         for (int i = 0; i < n.getChildCount(); i++) collectNodes(n.getChild(i), out, depth + 1);
     }
@@ -291,22 +333,118 @@ public class BuyerAccessibilityService extends AccessibilityService {
         return b.toString();
     }
 
-    private String collectText(AccessibilityNodeInfo root) {
-        StringBuilder b = new StringBuilder();
-        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
-        collectNodes(root, nodes, 0);
-        for (AccessibilityNodeInfo n : nodes) b.append(textOf(n)).append(' ');
-        return b.toString();
-    }
-
-    private boolean clickNode(AccessibilityNodeInfo node) {
+    private boolean clickNodeOrTap(AccessibilityNodeInfo node) {
         AccessibilityNodeInfo current = node;
-        for (int i = 0; current != null && i < 7; i++) {
+        for (int i = 0; current != null && i < 10; i++) {
             if (current.isEnabled() && current.isClickable() &&
                     current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true;
             current = current.getParent();
         }
+        Rect bounds = new Rect();
+        node.getBoundsInScreen(bounds);
+        if (bounds.width() > 0 && bounds.height() > 0) {
+            return tap(bounds.centerX(), bounds.centerY());
+        }
         return false;
+    }
+
+    // Fallback for custom buttons that Android exposes as clickable containers
+    // but does not expose their visible label as an actionable node.
+    private boolean tapBottomButton(AccessibilityNodeInfo root) {
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+        collectNodes(root, nodes, 0);
+        AccessibilityNodeInfo best = null;
+        long bestScore = Long.MIN_VALUE;
+        for (AccessibilityNodeInfo n : nodes) {
+            if (!n.isVisibleToUser() || !n.isEnabled() || !n.isClickable()) continue;
+            Rect r = new Rect();
+            n.getBoundsInScreen(r);
+            if (r.width() < screenW * 0.48f || r.height() < dp(30)) continue;
+            if (r.width() > screenW * 0.97f || r.height() > screenH * 0.45f) continue;
+            if (r.centerY() < screenH * 0.52f || r.centerY() > screenH * 0.92f) continue;
+            long score = (long) r.centerY() * 1000L + r.width() - r.height();
+            if (score > bestScore) {
+                bestScore = score;
+                best = n;
+            }
+        }
+        if (best != null) {
+            Rect r = new Rect();
+            best.getBoundsInScreen(r);
+            if (best.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true;
+            return tap(r.centerX(), r.centerY());
+        }
+        return false;
+    }
+
+    private boolean tapTopRightLogin(AccessibilityNodeInfo root) {
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+        collectNodes(root, nodes, 0);
+        AccessibilityNodeInfo best = null;
+        long bestScore = Long.MAX_VALUE;
+        for (AccessibilityNodeInfo n : nodes) {
+            if (!n.isVisibleToUser() || !n.isEnabled()) continue;
+            Rect r = new Rect();
+            n.getBoundsInScreen(r);
+            if (r.isEmpty() || r.width() > screenW * 0.45f || r.height() > dp(90)) continue;
+            if (r.centerX() < screenW * 0.72f || r.centerY() > screenH * 0.20f) continue;
+            // Prefer the smallest actionable item in the top-right corner.
+            long score = (long) r.width() * r.height() - (long) r.centerX() * 3L;
+            if (score < bestScore && (n.isClickable() || r.width() > dp(24))) {
+                bestScore = score;
+                best = n;
+            }
+        }
+        if (best == null) return false;
+        return clickNodeOrTap(best);
+    }
+
+    private boolean tap(int x, int y) {
+        Path path = new Path();
+        path.moveTo(x, y);
+        GestureDescription gesture = new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(path, 0, 100))
+                .build();
+        return dispatchGesture(gesture, null, null);
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void saveScreenDiagnostics(AccessibilityNodeInfo root, int step) {
+        // Never save text from editable fields (phone number/password may be present).
+        int clickable = 0;
+        int editable = 0;
+        StringBuilder labels = new StringBuilder();
+        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+        collectNodes(root, nodes, 0);
+        for (AccessibilityNodeInfo n : nodes) {
+            if (n.isClickable()) clickable++;
+            if (n.isEditable()) editable++;
+            if (n.isClickable() || n.isCheckable()) {
+                String label = textOf(n).trim();
+                if (!label.isEmpty() && labels.length() < 500) labels.append(" [").append(label).append("]");
+            }
+        }
+        String pkg = root.getPackageName() == null ? "?" : root.getPackageName().toString();
+        String debug = "package=" + pkg + ", step=" + step + ", clickable=" + clickable +
+                ", editable=" + editable + ", controls=" + labels;
+        state().edit().putString("last_debug", debug).apply();
+    }
+
+    private String collectText(AccessibilityNodeInfo root) {
+        StringBuilder b = new StringBuilder();
+        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+        collectNodes(root, nodes, 0);
+        for (AccessibilityNodeInfo n : nodes) {
+            if (!n.isEditable()) b.append(textOf(n)).append(' ');
+        }
+        return b.toString();
     }
 
     private String readCredentials(String key) {
