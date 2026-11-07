@@ -14,12 +14,9 @@ Android accessibility helper for the user's own Makro PRO account and card appli
 
 The old debug APKs were built with runner-generated debug signing certificates. A permanent release key is required so Android can accept future updates as an update to the same app.
 
-Create these four **GitHub Actions repository secrets** in `walking2129/Teenoi-Coupon`:
+Create one **GitHub Actions repository secret** in `walking2129/Teenoi-Coupon`:
 
-- `SIGNING_KEYSTORE_BASE64`
-- `SIGNING_STORE_PASSWORD`
-- `SIGNING_KEY_ALIAS`
-- `SIGNING_KEY_PASSWORD`
+- `KIM_AUTOBUYER_SIGNING` — a JSON value containing the Base64 keystore, store password, key alias, and key password.
 
 The keystore and passwords must remain private. Never commit the keystore, its Base64 content, passwords, or a `local.properties`/signing-properties file to the repository. After adding the secrets, run the `Build and publish Kim Auto Buyer updates` workflow from GitHub Actions (or push a change under `KimAutoBuyer/`). It builds a release-signed APK, calculates SHA-256, writes `update-server/latest.json`, and commits the APK and manifest to the Pages site. The existing Pages workflow then deploys the files.
 
