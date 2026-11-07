@@ -261,10 +261,19 @@ public class BuyerAccessibilityService extends AccessibilityService {
     }
 
     private void doPassportForm(AccessibilityNodeInfo root) {
-        // Passport number is intentionally left for the user to enter from
-        // their real passport. This flow never creates a fabricated ID number.
+        boolean passportDone = state().getBoolean("passport_number_filled", false);
         boolean dobDone = state().getBoolean("dob_filled", false);
         boolean refDone = state().getBoolean("referrer_filled", false);
+
+        String passportNumber = readCredentials("passport_number");
+        AccessibilityNodeInfo passportField = findFieldForLabel(root,
+                "passport number", "passport no", "passport no.", "passport number (as shown)",
+                "เลขที่หนังสือเดินทาง", "หมายเลขหนังสือเดินทาง");
+        if (!passportDone && passportField != null && !passportNumber.isEmpty() &&
+                setNodeText(passportField, passportNumber)) {
+            passportDone = true;
+            state().edit().putBoolean("passport_number_filled", true).apply();
+        }
 
         AccessibilityNodeInfo dob = findFieldForLabel(root,
                 "date of birth", "dob", "วันเดือนปีเกิด", "วันเกิด");
@@ -281,36 +290,44 @@ public class BuyerAccessibilityService extends AccessibilityService {
             state().edit().putBoolean("referrer_filled", true).apply();
         }
 
-        if (dobDone && refDone) {
+        if (passportDone && dobDone && refDone) {
             AccessibilityNodeInfo addAddress = findOptionText(root,
                     "add address", "เพิ่มที่อยู่");
             if (addAddress != null && clickNodeOrTap(addAddress)) {
-                setStep(ADDRESS, "กด Add address แล้ว กำลังกรอกที่อยู่");
+                state().edit().putBoolean("address_filled", false)
+                        .putBoolean("zip_filled", false)
+                        .putBoolean("district_selected", false)
+                        .putBoolean("subdistrict_selected", false)
+                        .putInt("district_open_attempts", 0)
+                        .putInt("subdistrict_open_attempts", 0)
+                        .putInt("address_scrolls", 0).apply();
+                setStep(ADDRESS, "กรอก Passport number, วันเกิด และ Referrer code แล้ว — กด Add address");
                 return;
             }
-        }
-
-        if (dobDone && refDone) {
-            setStatus("กรอกวันเกิดและ Referrer code แล้ว — กรุณากรอก Passport number จริงด้วยตนเอง และเลื่อนให้เห็น Add address");
-            return;
         }
 
         int scrolls = state().getInt("form_scrolls", 0);
         AccessibilityNodeInfo scrollable = findScrollable(root);
         if (scrollable != null && scrolls < 10 &&
                 scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
+            String message;
+            if (!passportDone) message = "กำลังค้นหาช่อง Passport number";
+            else if (!dobDone) message = "กำลังค้นหาช่อง Date of birth";
+            else if (!refDone) message = "กำลังค้นหาช่อง Referrer code";
+            else message = "เลื่อนหา Add address";
             state().edit().putInt("form_scrolls", scrolls + 1)
-                    .putString("status", dobDone && refDone
-                            ? "เลื่อนหา Add address — อย่าลืมกรอก Passport number จริงด้วยตนเอง"
-                            : "เลื่อนแบบฟอร์มเพื่อหาช่อง Date of birth และ Referrer code")
-                    .apply();
+                    .putString("status", message).apply();
             return;
         }
 
-        if (scrolls >= 10) {
-            stopWith("พบหน้า Passport แต่หาช่องวันเกิดหรือ Referrer code ไม่ครบ กรุณาตรวจหน้าจอ");
+        if (!passportDone) {
+            setStatus("ยังไม่พบช่อง Passport number — ตรวจว่าหน้าจอแบบฟอร์ม Passport เปิดอยู่");
+        } else if (!dobDone) {
+            setStatus("ยังไม่พบช่อง Date of birth");
+        } else if (!refDone) {
+            setStatus("ยังไม่พบช่อง Referrer code");
         } else {
-            setStatus("พบหน้า Passport แล้ว กำลังรอช่อง Date of birth และ Referrer code");
+            setStatus("กรอกข้อมูล Passport แล้ว กำลังหา Add address");
         }
     }
 
