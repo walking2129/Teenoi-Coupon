@@ -308,8 +308,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
 
         int scrolls = state().getInt("form_scrolls", 0);
         AccessibilityNodeInfo scrollable = findScrollable(root);
-        if (scrollable != null && scrolls < 10 &&
-                scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
+        if (scrolls < 10 && ((scrollable != null &&
+                scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) ||
+                swipeUp())) {
             String message;
             if (!passportDone) message = "กำลังค้นหาช่อง Passport number";
             else if (!dobDone) message = "กำลังค้นหาช่อง Date of birth";
@@ -401,7 +402,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
         if (clickExactAction(root, new String[]{"save", "บันทึก"})) {
             setStep(APPLY, "กด Save แล้ว กำลังรอปุ่ม Apply");
         } else {
-            setStatus("กรอกที่อยู่และเลือกเขต/ตำบลครบแล้ว แต่ยังไม่พบปุ่ม Save");
+            scrollAddressForm(root, "กรอกที่อยู่ครบแล้ว กำลังค้นหาปุ่ม Save");
         }
     }
 
@@ -412,7 +413,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
             return;
         }
 
-        if (clickExactAction(root, new String[]{"apply", "apply now", "ยื่นใบสมัคร", "สมัคร"})) {
+        if (clickExactAction(root, new String[]{"apply now", "apply", "ยื่นใบสมัคร"})) {
             stopWith("กด Apply แล้ว กรุณาตรวจผลบนหน้าจอ Makro PRO");
             return;
         }
@@ -423,8 +424,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
     private void scrollAddressForm(AccessibilityNodeInfo root, String message) {
         int scrolls = state().getInt("address_scrolls", 0);
         AccessibilityNodeInfo scrollable = findScrollable(root);
-        if (scrollable != null && scrolls < 8 &&
-                scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
+        if (scrolls < 8 && ((scrollable != null &&
+                scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) ||
+                swipeUp())) {
             state().edit().putInt("address_scrolls", scrolls + 1)
                     .putString("status", message).apply();
         } else if (scrolls >= 8) {
@@ -527,10 +529,17 @@ public class BuyerAccessibilityService extends AccessibilityService {
         List<AccessibilityNodeInfo> fields = editableNodes(root);
 
         // First prefer a text field whose own hint/description names the field.
+        // Match whole label phrases so "District" never accidentally matches
+        // the different field "Sub-district".
         for (AccessibilityNodeInfo field : fields) {
-            String own = textOf(field).toLowerCase(Locale.ROOT);
+            String own = textOf(field).toLowerCase(Locale.ROOT).trim()
+                    .replaceAll("\\s+", " ");
             for (String label : labels) {
-                if (own.contains(label.toLowerCase(Locale.ROOT))) return field;
+                String wanted = label.toLowerCase(Locale.ROOT).trim();
+                if (own.equals(wanted) || own.startsWith(wanted + " ") ||
+                        own.startsWith(wanted + ":") || own.endsWith(" " + wanted) ||
+                        own.contains(" " + wanted + ":") ||
+                        own.contains(" " + wanted + " ")) return field;
             }
         }
 
@@ -751,6 +760,18 @@ public class BuyerAccessibilityService extends AccessibilityService {
         }
         if (best == null) return false;
         return clickNodeOrTap(best);
+    }
+
+    private boolean swipeUp() {
+        int width = getResources().getDisplayMetrics().widthPixels;
+        int height = getResources().getDisplayMetrics().heightPixels;
+        Path path = new Path();
+        path.moveTo(width / 2f, height * 0.82f);
+        path.lineTo(width / 2f, height * 0.34f);
+        GestureDescription gesture = new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(path, 0, 420))
+                .build();
+        return dispatchGesture(gesture, null, null);
     }
 
     private boolean tap(int x, int y) {
