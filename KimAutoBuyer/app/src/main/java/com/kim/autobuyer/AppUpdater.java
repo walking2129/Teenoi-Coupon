@@ -2,6 +2,8 @@ package com.kim.autobuyer;
 
 import android.app.Activity;
 import android.app.DownloadManager;
+import android.app.PendingIntent;
+import android.content.pm.PackageInstaller;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -14,13 +16,12 @@ import android.provider.Settings;
 import android.database.Cursor;
 import android.widget.Toast;
 
-import androidx.core.content.FileProvider;
-
 import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
@@ -229,17 +230,51 @@ public final class AppUpdater {
             return;
         }
 
+        int sessionId = -1;
         try {
-            Uri uri = FileProvider.getUriForFile(activity,
-                    activity.getPackageName() + ".fileprovider", apk);
-            Intent install = new Intent(Intent.ACTION_VIEW);
-            install.setDataAndType(uri, "application/vnd.android.package-archive");
-            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            PackageInstaller installer = activity.getPackageManager().getPackageInstaller();
+            PackageInstaller.SessionParams params =
+                    new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            params.setAppPackageName(activity.getPackageName());
+            params.setSize(apk.length());
+            if (Build.VERSION.SDK_INT >= 31) {
+                // Android may install this app's own update without a confirmation screen
+                // when its platform update-owner/installer conditions are satisfied.
+                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
+            }
+            sessionId = installer.createSession(params);
+            Intent resultIntent = new Intent(activity, InstallResultReceiver.class)
+                    .setAction(InstallResultReceiver.ACTION_INSTALL_RESULT)
+                    .putExtra(InstallResultReceiver.EXTRA_SESSION_ID, sessionId)
+                    .putExtra(InstallResultReceiver.EXTRA_VERSION,
+                            prefs().getInt("download_version", 0));
+            int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= 31) pendingFlags |= PendingIntent.FLAG_MUTABLE;
+            PendingIntent resultPendingIntent = PendingIntent.getBroadcast(
+                    activity, sessionId, resultIntent, pendingFlags);
+
+            try (PackageInstaller.Session session = installer.openSession(sessionId);
+                 FileInputStream input = new FileInputStream(apk);
+                 OutputStream output = session.openWrite("base.apk", 0, apk.length())) {
+                byte[] buffer = new byte[16 * 1024];
+                int count;
+                while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                session.fsync(output);
+                session.commit(resultPendingIntent.getIntentSender());
+            }
             prefs().edit().putBoolean("install_launched", true).apply();
-            activity.startActivity(install);
+            show("ส่งไฟล์อัปเดตให้ Android ติดตั้งแล้ว");
         } catch (Exception e) {
+            if (sessionId >= 0) {
+                try {
+                    activity.getPackageManager().getPackageInstaller().abandonSession(sessionId);
+                } catch (Exception ignored) {
+                    // Best-effort cleanup only.
+                }
+            }
             prefs().edit().putBoolean("install_launched", false).apply();
-            show("เปิดหน้าติดตั้งไม่สำเร็จ: " + e.getMessage());
+            show("ติดตั้งอัปเดตไม่สำเร็จ: " +
+                    (e.getMessage() == null ? "เกิดข้อผิดพลาด" : e.getMessage()));
         }
     }
 
