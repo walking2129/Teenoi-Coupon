@@ -282,12 +282,17 @@ public class BuyerAccessibilityService extends AccessibilityService {
         }
 
         if (dobDone && refDone) {
-            AccessibilityNodeInfo addAddress = findExactText(root,
+            AccessibilityNodeInfo addAddress = findOptionText(root,
                     "add address", "เพิ่มที่อยู่");
             if (addAddress != null && clickNodeOrTap(addAddress)) {
                 setStep(ADDRESS, "กด Add address แล้ว กำลังกรอกที่อยู่");
                 return;
             }
+        }
+
+        if (dobDone && refDone) {
+            setStatus("กรอกวันเกิดและ Referrer code แล้ว — กรุณากรอก Passport number จริงด้วยตนเอง และเลื่อนให้เห็น Add address");
+            return;
         }
 
         int scrolls = state().getInt("form_scrolls", 0);
@@ -302,9 +307,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
             return;
         }
 
-        if (dobDone && refDone) {
-            setStatus("กรอกวันเกิดและ Referrer code แล้ว กรุณากรอก Passport number จริงด้วยตนเอง และรอ/กด Add address");
-        } else if (scrolls >= 10) {
+        if (scrolls >= 10) {
             stopWith("พบหน้า Passport แต่หาช่องวันเกิดหรือ Referrer code ไม่ครบ กรุณาตรวจหน้าจอ");
         } else {
             setStatus("พบหน้า Passport แล้ว กำลังรอช่อง Date of birth และ Referrer code");
@@ -336,7 +339,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
 
         boolean districtDone = state().getBoolean("district_selected", false);
         if (!districtDone) {
-            AccessibilityNodeInfo option = findExactText(root,
+            AccessibilityNodeInfo option = findOptionText(root,
                     "mueang chon buri", "เมืองชลบุรี");
             if (option != null && clickNodeOrTap(option)) {
                 state().edit().putBoolean("district_selected", true)
@@ -358,7 +361,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
 
         boolean subdistrictDone = state().getBoolean("subdistrict_selected", false);
         if (!subdistrictDone) {
-            AccessibilityNodeInfo option = findExactText(root,
+            AccessibilityNodeInfo option = findOptionText(root,
                     "bang pla soi", "bang pla soy", "บางปลาสร้อย");
             if (option != null && clickNodeOrTap(option)) {
                 state().edit().putBoolean("subdistrict_selected", true)
@@ -415,6 +418,22 @@ public class BuyerAccessibilityService extends AccessibilityService {
     }
 
     private AccessibilityNodeInfo findExactText(AccessibilityNodeInfo root, String... values) {
+        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+        collectNodes(root, nodes, 0);
+        for (AccessibilityNodeInfo node : nodes) {
+            if (!node.isVisibleToUser()) continue;
+            String text = textOf(node).toLowerCase(Locale.ROOT).trim()
+                    .replaceAll("\\s+", " ");
+            for (String value : values) {
+                String wanted = value.toLowerCase(Locale.ROOT).trim()
+                        .replaceAll("\\s+", " ");
+                if (text.equals(wanted)) return node;
+            }
+        }
+        return null;
+    }
+
+    private AccessibilityNodeInfo findOptionText(AccessibilityNodeInfo root, String... values) {
         List<AccessibilityNodeInfo> nodes = new ArrayList<>();
         collectNodes(root, nodes, 0);
         for (AccessibilityNodeInfo node : nodes) {
@@ -507,7 +526,8 @@ public class BuyerAccessibilityService extends AccessibilityService {
             String labelText = textOf(labelNode).toLowerCase(Locale.ROOT).trim();
             boolean matches = false;
             for (String label : labels) {
-                if (labelText.contains(label.toLowerCase(Locale.ROOT))) {
+                String wanted = label.toLowerCase(Locale.ROOT).trim();
+                if (labelText.equals(wanted) || labelText.startsWith(wanted + " ")) {
                     matches = true;
                     break;
                 }
