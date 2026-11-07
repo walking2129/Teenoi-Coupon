@@ -26,7 +26,8 @@ public class BuyerAccessibilityService extends AccessibilityService {
     private static final int CARD = 2;
     private static final int PERSONAL = 3;
     private static final int PASSPORT = 4;
-    private static final int DONE = 5;
+    private static final int PASSPORT_FORM = 5;
+    private static final int DONE = 6;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean tickQueued = false;
@@ -113,6 +114,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
                 break;
             case PASSPORT:
                 doPassport(root);
+                break;
+            case PASSPORT_FORM:
+                doPassportForm(root);
                 break;
             default:
                 state().edit().putBoolean("running", false)
@@ -216,9 +220,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
 
     private void doPassport(AccessibilityNodeInfo root) {
         if (isPassportForm(root)) {
-            state().edit().putBoolean("running", false).putInt("step", DONE)
-                    .putString("status", "ยืนยันแล้วว่าเปิดหน้าแบบฟอร์ม Passport").apply();
-            Toast.makeText(this, "ถึงหน้าแบบฟอร์ม Passport แล้ว", Toast.LENGTH_LONG).show();
+            setStep(PASSPORT_FORM, "เปิดแบบฟอร์ม Passport แล้ว กำลังกรอกวันเกิดและรหัสผู้แนะนำ");
             return;
         }
 
@@ -246,7 +248,128 @@ public class BuyerAccessibilityService extends AccessibilityService {
         return hasAny(root, "passport number", "passport no", "passport details",
                 "เลขที่หนังสือเดินทาง", "หมายเลขหนังสือเดินทาง",
                 "วันหมดอายุหนังสือเดินทาง", "passport expiry", "date of expiry",
-                "issuing country", "ประเทศที่ออกหนังสือเดินทาง");
+                "issuing country", "ประเทศที่ออกหนังสือเดินทาง",
+                "date of birth", "referrer code", "referral code");
+    }
+
+    private void doPassportForm(AccessibilityNodeInfo root) {
+        // Intentionally never invent a passport number. The user must enter the
+        // number printed on their own valid passport.
+        boolean dobDone = state().getBoolean("dob_filled", false);
+        boolean refDone = state().getBoolean("referrer_filled", false);
+
+        AccessibilityNodeInfo dob = findFieldForLabel(root,
+                "date of birth", "dob", "วันเดือนปีเกิด", "วันเกิด");
+        if (!dobDone && dob != null) {
+            if (setNodeText(dob, "21/11/1986")) {
+                dobDone = true;
+                state().edit().putBoolean("dob_filled", true).apply();
+            }
+        }
+
+        AccessibilityNodeInfo referrer = findFieldForLabel(root,
+                "referrer code", "referral code", "referrer", "referral",
+                "รหัสผู้แนะนำ", "รหัสแนะนำ");
+        if (!refDone && referrer != null) {
+            if (setNodeText(referrer, "WIEX2PIW")) {
+                refDone = true;
+                state().edit().putBoolean("referrer_filled", true).apply();
+            }
+        }
+
+        if (dobDone && refDone) {
+            state().edit().putBoolean("running", false).putInt("step", DONE)
+                    .putString("status",
+                            "กรอกวันเกิด 21/11/1986 และ Referrer code WIEX2PIW แล้ว — เว้น Passport number ไว้ให้กรอกเลขจริงด้วยตนเอง")
+                    .apply();
+            Toast.makeText(this,
+                    "กรอกวันเกิดและรหัสผู้แนะนำแล้ว กรุณากรอก Passport number จริงด้วยตนเอง",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        int scrolls = state().getInt("form_scrolls", 0);
+        AccessibilityNodeInfo scrollable = findScrollable(root);
+        if (scrollable != null && scrolls < 6 &&
+                scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
+            state().edit().putInt("form_scrolls", scrolls + 1)
+                    .putString("status", "เลื่อนแบบฟอร์มเพื่อค้นหาช่องวันเกิดและรหัสผู้แนะนำ")
+                    .apply();
+            return;
+        }
+
+        if (scrolls >= 6) {
+            stopWith("พบหน้า Passport แล้ว แต่ยังระบุช่องวันเกิดหรือ Referrer code ไม่ได้ — กรุณาตรวจหน้าจอและกรอกช่องที่เหลือเอง");
+        } else {
+            setStatus("พบหน้า Passport แล้ว กำลังรอช่อง Date of birth และ Referrer code");
+        }
+    }
+
+    private AccessibilityNodeInfo findFieldForLabel(AccessibilityNodeInfo root, String... labels) {
+        List<AccessibilityNodeInfo> all = new ArrayList<>();
+        collectNodes(root, all, 0);
+        List<AccessibilityNodeInfo> fields = editableNodes(root);
+
+        // First prefer a text field whose own hint/description names the field.
+        for (AccessibilityNodeInfo field : fields) {
+            String own = textOf(field).toLowerCase(Locale.ROOT);
+            for (String label : labels) {
+                if (own.contains(label.toLowerCase(Locale.ROOT))) return field;
+            }
+        }
+
+        // Otherwise associate the visible field label with the nearest editable
+        // control directly below it, preferring horizontal alignment.
+        AccessibilityNodeInfo best = null;
+        long bestScore = Long.MAX_VALUE;
+        for (AccessibilityNodeInfo labelNode : all) {
+            if (!labelNode.isVisibleToUser()) continue;
+            String labelText = textOf(labelNode).toLowerCase(Locale.ROOT).trim();
+            boolean matches = false;
+            for (String label : labels) {
+                if (labelText.contains(label.toLowerCase(Locale.ROOT))) {
+                    matches = true;
+                    break;
+                }
+            }
+            if (!matches) continue;
+
+            Rect labelBounds = new Rect();
+            labelNode.getBoundsInScreen(labelBounds);
+            if (labelBounds.isEmpty()) continue;
+
+            for (AccessibilityNodeInfo field : fields) {
+                if (!field.isVisibleToUser() || !field.isEnabled()) continue;
+                Rect fieldBounds = new Rect();
+                field.getBoundsInScreen(fieldBounds);
+                if (fieldBounds.isEmpty()) continue;
+
+                int verticalGap = fieldBounds.top - labelBounds.bottom;
+                if (verticalGap < -dp(24) || verticalGap > dp(180)) continue;
+                int horizontalOverlap = Math.min(labelBounds.right, fieldBounds.right) -
+                        Math.max(labelBounds.left, fieldBounds.left);
+                boolean aligned = horizontalOverlap > 0 ||
+                        Math.abs(labelBounds.centerX() - fieldBounds.centerX()) < dp(100);
+                if (!aligned) continue;
+
+                long score = (long) Math.max(0, verticalGap) * 1000L +
+                        Math.abs(labelBounds.centerX() - fieldBounds.centerX());
+                if (score < bestScore) {
+                    bestScore = score;
+                    best = field;
+                }
+            }
+        }
+        return best;
+    }
+
+    private AccessibilityNodeInfo findScrollable(AccessibilityNodeInfo root) {
+        List<AccessibilityNodeInfo> all = new ArrayList<>();
+        collectNodes(root, all, 0);
+        for (AccessibilityNodeInfo node : all) {
+            if (node.isVisibleToUser() && node.isScrollable() && node.isEnabled()) return node;
+        }
+        return null;
     }
 
     private boolean hasPasswordField(AccessibilityNodeInfo root) {
@@ -280,7 +403,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
 
     private void collectEditable(AccessibilityNodeInfo n, List<AccessibilityNodeInfo> out, int depth) {
         if (n == null || depth > 40) return;
-        if (n.isEditable()) out.add(n);
+        if (n.isEditable() && n.isVisibleToUser()) out.add(n);
         for (int i = 0; i < n.getChildCount(); i++) collectEditable(n.getChild(i), out, depth + 1);
     }
 
