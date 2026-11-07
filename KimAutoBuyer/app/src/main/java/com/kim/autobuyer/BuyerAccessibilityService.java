@@ -305,6 +305,16 @@ public class BuyerAccessibilityService extends AccessibilityService {
             if (!n.isVisibleToUser()) continue;
             String t = textOf(n).toLowerCase(Locale.ROOT).trim();
             if (t.isEmpty()) continue;
+            boolean loginSearch = false;
+            for (String m : matches) {
+                String q = m.toLowerCase(Locale.ROOT);
+                if (q.equals("login") || q.equals("log in") || q.equals("sign in") ||
+                        q.equals("เข้าสู่ระบบ") || q.equals("ลงชื่อเข้าใช้") || q.equals("ล็อกอิน")) {
+                    loginSearch = true;
+                }
+            }
+            if (loginSearch && (t.contains("otp") || t.contains("one time password") ||
+                    t.contains("รหัส otp"))) continue;
             for (String m : matches) {
                 String q = m.toLowerCase(Locale.ROOT);
                 if (t.equals(q) || t.contains(q)) return n;
