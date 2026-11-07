@@ -1,0 +1,38 @@
+name: Build Kim Auto Buyer APK
+
+on:
+  push:
+    paths:
+      - "KimAutoBuyer/**"
+      - ".github/workflows/kim-auto-buyer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Build debug APK
+        run: gradle --no-daemon -p KimAutoBuyer assembleDebug
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: KimAutoBuyer-debug-apk
+          path: KimAutoBuyer/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
