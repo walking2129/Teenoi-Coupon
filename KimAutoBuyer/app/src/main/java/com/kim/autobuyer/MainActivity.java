@@ -28,6 +28,7 @@ import java.util.List;
 public class MainActivity extends Activity {
     private EditText phoneInput;
     private EditText passwordInput;
+    private EditText passportNumberInput;
     private CheckBox rememberBox;
     private TextView statusView;
 
@@ -75,6 +76,15 @@ public class MainActivity extends Activity {
         passwordInput.setHint("กรอกรหัสผ่าน Makro PRO");
         passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         page.addView(passwordInput, matchWrap());
+
+        page.addView(label("Passport number (เลขจากพาสปอร์ตจริง)"));
+        passportNumberInput = new EditText(this);
+        passportNumberInput.setSingleLine(true);
+        passportNumberInput.setTextSize(16);
+        passportNumberInput.setHint("คีย์เลข Passport number ของคุณ");
+        passportNumberInput.setInputType(InputType.TYPE_CLASS_TEXT |
+                InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        page.addView(passportNumberInput, matchWrap());
 
         rememberBox = new CheckBox(this);
         rememberBox.setText("บันทึกข้อมูลเข้าสู่ระบบในเครื่องนี้แบบเข้ารหัส");
@@ -165,6 +175,7 @@ public class MainActivity extends Activity {
             android.content.SharedPreferences p = encryptedPrefs();
             phoneInput.setText(p.getString("phone", ""));
             passwordInput.setText(p.getString("password", ""));
+            passportNumberInput.setText(p.getString("passport_number", ""));
         } catch (Exception e) {
             Toast.makeText(this, "เปิดพื้นที่เก็บข้อมูลเข้ารหัสไม่ได้: " + e.getMessage(),
                     Toast.LENGTH_LONG).show();
@@ -175,7 +186,9 @@ public class MainActivity extends Activity {
         android.content.SharedPreferences p = encryptedPrefs();
         if (rememberBox.isChecked()) {
             p.edit().putString("phone", phoneInput.getText().toString().trim())
-                    .putString("password", passwordInput.getText().toString()).apply();
+                    .putString("password", passwordInput.getText().toString())
+                    .putString("passport_number", passportNumberInput.getText().toString().trim())
+                    .apply();
         } else {
             p.edit().clear().apply();
         }
@@ -192,8 +205,11 @@ public class MainActivity extends Activity {
     private void startAutomation() {
         String phone = phoneInput.getText().toString().trim();
         String password = passwordInput.getText().toString();
-        if (phone.isEmpty() || password.isEmpty()) {
-            Toast.makeText(this, "กรอกเบอร์โทร/อีเมลและรหัสผ่านก่อน", Toast.LENGTH_LONG).show();
+        String passportNumber = passportNumberInput.getText().toString().trim();
+        if (phone.isEmpty() || password.isEmpty() || passportNumber.isEmpty()) {
+            Toast.makeText(this,
+                    "กรอกเบอร์/อีเมล รหัสผ่าน และ Passport number จริงก่อนเริ่ม",
+                    Toast.LENGTH_LONG).show();
             return;
         }
         try {
@@ -224,8 +240,16 @@ public class MainActivity extends Activity {
                 .putLong("passport_clicked_at", 0L)
                 .putInt("passport_attempts", 0)
                 .putInt("form_scrolls", 0)
+                .putBoolean("passport_number_filled", false)
                 .putBoolean("dob_filled", false)
                 .putBoolean("referrer_filled", false)
+                .putBoolean("address_filled", false)
+                .putBoolean("zip_filled", false)
+                .putBoolean("district_selected", false)
+                .putBoolean("subdistrict_selected", false)
+                .putInt("district_open_attempts", 0)
+                .putInt("subdistrict_open_attempts", 0)
+                .putInt("address_scrolls", 0)
                 .putString("target_package", pkg)
                 .putString("status", "กำลังเปิด Makro PRO").apply();
         Intent launch = getPackageManager().getLaunchIntentForPackage(pkg);
