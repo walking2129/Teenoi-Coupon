@@ -30,7 +30,7 @@ import java.util.concurrent.Executors;
 
 public final class AppUpdater {
     private static final String MANIFEST_URL =
-            "https://walking2129.github.io/Teenoi-Coupon/KimAutoBuyer/updates/latest.json";
+            "https://walking2129.github.io/Teenoi-Coupon/update-server/latest.json";
     private static final String EXPECTED_HOST = "walking2129.github.io";
     private static final String APK_NAME = "KimAutoBuyer-update.apk";
     private static final String PREFS = "kim_auto_updater";
@@ -77,6 +77,7 @@ public final class AppUpdater {
                 if (oldDownloadId >= 0L) {
                     int queuedVersion = prefs().getInt("download_version", 0);
                     if (queuedVersion > installedVersion) {
+                        prefs().edit().putBoolean("install_launched", false).apply();
                         activity.runOnUiThread(() -> {
                             show("พบไฟล์อัปเดตที่ดาวน์โหลดไว้แล้ว กำลังเปิดตัวติดตั้ง");
                             processPendingDownload();
@@ -152,6 +153,15 @@ public final class AppUpdater {
     }
 
     public void resumePendingInstall() {
+        int queuedVersion = prefs().getInt("download_version", 0);
+        try {
+            if (queuedVersion > 0 && queuedVersion <= installedVersionCode()) {
+                clearPendingDownload();
+                return;
+            }
+        } catch (Exception ignored) {
+            // A transient package-manager error should not discard the download.
+        }
         if (prefs().getBoolean("needs_install_permission", false)) {
             if (canInstallPackages()) {
                 prefs().edit().putBoolean("needs_install_permission", false)
