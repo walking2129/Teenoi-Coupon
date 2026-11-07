@@ -27,7 +27,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
     private static final int PERSONAL = 3;
     private static final int PASSPORT = 4;
     private static final int PASSPORT_FORM = 5;
-    private static final int DONE = 6;
+    private static final int ADDRESS = 6;
+    private static final int APPLY = 7;
+    private static final int DONE = 8;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean tickQueued = false;
@@ -117,6 +119,12 @@ public class BuyerAccessibilityService extends AccessibilityService {
                 break;
             case PASSPORT_FORM:
                 doPassportForm(root);
+                break;
+            case ADDRESS:
+                doAddress(root);
+                break;
+            case APPLY:
+                doApply(root);
                 break;
             default:
                 state().edit().putBoolean("running", false)
@@ -253,56 +261,228 @@ public class BuyerAccessibilityService extends AccessibilityService {
     }
 
     private void doPassportForm(AccessibilityNodeInfo root) {
-        // Intentionally never invent a passport number. The user must enter the
-        // number printed on their own valid passport.
+        // Passport number is intentionally left for the user to enter from
+        // their real passport. This flow never creates a fabricated ID number.
         boolean dobDone = state().getBoolean("dob_filled", false);
         boolean refDone = state().getBoolean("referrer_filled", false);
 
         AccessibilityNodeInfo dob = findFieldForLabel(root,
                 "date of birth", "dob", "วันเดือนปีเกิด", "วันเกิด");
-        if (!dobDone && dob != null) {
-            if (setNodeText(dob, "21/11/1986")) {
-                dobDone = true;
-                state().edit().putBoolean("dob_filled", true).apply();
-            }
+        if (!dobDone && dob != null && setNodeText(dob, "21/11/1986")) {
+            dobDone = true;
+            state().edit().putBoolean("dob_filled", true).apply();
         }
 
         AccessibilityNodeInfo referrer = findFieldForLabel(root,
                 "referrer code", "referral code", "referrer", "referral",
                 "รหัสผู้แนะนำ", "รหัสแนะนำ");
-        if (!refDone && referrer != null) {
-            if (setNodeText(referrer, "WIEX2PIW")) {
-                refDone = true;
-                state().edit().putBoolean("referrer_filled", true).apply();
-            }
+        if (!refDone && referrer != null && setNodeText(referrer, "WIEX2PIW")) {
+            refDone = true;
+            state().edit().putBoolean("referrer_filled", true).apply();
         }
 
         if (dobDone && refDone) {
-            state().edit().putBoolean("running", false).putInt("step", DONE)
-                    .putString("status",
-                            "กรอกวันเกิด 21/11/1986 และ Referrer code WIEX2PIW แล้ว — เว้น Passport number ไว้ให้กรอกเลขจริงด้วยตนเอง")
-                    .apply();
-            Toast.makeText(this,
-                    "กรอกวันเกิดและรหัสผู้แนะนำแล้ว กรุณากรอก Passport number จริงด้วยตนเอง",
-                    Toast.LENGTH_LONG).show();
-            return;
+            AccessibilityNodeInfo addAddress = findExactText(root,
+                    "add address", "เพิ่มที่อยู่");
+            if (addAddress != null && clickNodeOrTap(addAddress)) {
+                setStep(ADDRESS, "กด Add address แล้ว กำลังกรอกที่อยู่");
+                return;
+            }
         }
 
         int scrolls = state().getInt("form_scrolls", 0);
         AccessibilityNodeInfo scrollable = findScrollable(root);
-        if (scrollable != null && scrolls < 6 &&
+        if (scrollable != null && scrolls < 10 &&
                 scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
             state().edit().putInt("form_scrolls", scrolls + 1)
-                    .putString("status", "เลื่อนแบบฟอร์มเพื่อค้นหาช่องวันเกิดและรหัสผู้แนะนำ")
+                    .putString("status", dobDone && refDone
+                            ? "เลื่อนหา Add address — อย่าลืมกรอก Passport number จริงด้วยตนเอง"
+                            : "เลื่อนแบบฟอร์มเพื่อหาช่อง Date of birth และ Referrer code")
                     .apply();
             return;
         }
 
-        if (scrolls >= 6) {
-            stopWith("พบหน้า Passport แล้ว แต่ยังระบุช่องวันเกิดหรือ Referrer code ไม่ได้ — กรุณาตรวจหน้าจอและกรอกช่องที่เหลือเอง");
+        if (dobDone && refDone) {
+            setStatus("กรอกวันเกิดและ Referrer code แล้ว กรุณากรอก Passport number จริงด้วยตนเอง และรอ/กด Add address");
+        } else if (scrolls >= 10) {
+            stopWith("พบหน้า Passport แต่หาช่องวันเกิดหรือ Referrer code ไม่ครบ กรุณาตรวจหน้าจอ");
         } else {
             setStatus("พบหน้า Passport แล้ว กำลังรอช่อง Date of birth และ Referrer code");
         }
+    }
+
+    private void doAddress(AccessibilityNodeInfo root) {
+        boolean addressDone = state().getBoolean("address_filled", false);
+        boolean zipDone = state().getBoolean("zip_filled", false);
+
+        AccessibilityNodeInfo address = findFieldForLabel(root,
+                "address", "house no", "house number", "ที่อยู่", "บ้านเลขที่");
+        if (!addressDone && address != null && setNodeText(address, "888")) {
+            addressDone = true;
+            state().edit().putBoolean("address_filled", true).apply();
+        }
+
+        AccessibilityNodeInfo zip = findFieldForLabel(root,
+                "zip code", "postal code", "postcode", "รหัสไปรษณีย์");
+        if (!zipDone && zip != null && setNodeText(zip, "20000")) {
+            zipDone = true;
+            state().edit().putBoolean("zip_filled", true).apply();
+        }
+
+        if (!addressDone || !zipDone) {
+            scrollAddressForm(root, "กำลังค้นหาช่อง Address และ Zip code");
+            return;
+        }
+
+        boolean districtDone = state().getBoolean("district_selected", false);
+        if (!districtDone) {
+            AccessibilityNodeInfo option = findExactText(root,
+                    "mueang chon buri", "เมืองชลบุรี");
+            if (option != null && clickNodeOrTap(option)) {
+                state().edit().putBoolean("district_selected", true)
+                        .putString("status", "เลือก District: Mueang Chon Buri แล้ว").apply();
+                return;
+            }
+
+            AccessibilityNodeInfo control = findControlForLabel(root,
+                    "district", "อำเภอ");
+            int attempts = state().getInt("district_open_attempts", 0);
+            if (control != null && attempts < 3 && clickNodeOrTap(control)) {
+                state().edit().putInt("district_open_attempts", attempts + 1)
+                        .putString("status", "เปิดรายการ District เพื่อเลือก Mueang Chon Buri").apply();
+                return;
+            }
+            scrollAddressForm(root, "กำลังค้นหารายการ District: Mueang Chon Buri");
+            return;
+        }
+
+        boolean subdistrictDone = state().getBoolean("subdistrict_selected", false);
+        if (!subdistrictDone) {
+            AccessibilityNodeInfo option = findExactText(root,
+                    "bang pla soi", "bang pla soy", "บางปลาสร้อย");
+            if (option != null && clickNodeOrTap(option)) {
+                state().edit().putBoolean("subdistrict_selected", true)
+                        .putString("status", "เลือก Sub-district: Bang Pla Soi แล้ว").apply();
+                return;
+            }
+
+            AccessibilityNodeInfo control = findControlForLabel(root,
+                    "sub-district", "subdistrict", "ตำบล");
+            int attempts = state().getInt("subdistrict_open_attempts", 0);
+            if (control != null && attempts < 3 && clickNodeOrTap(control)) {
+                state().edit().putInt("subdistrict_open_attempts", attempts + 1)
+                        .putString("status", "เปิดรายการ Sub-district เพื่อเลือก Bang Pla Soi").apply();
+                return;
+            }
+            scrollAddressForm(root, "กำลังค้นหารายการ Sub-district: Bang Pla Soi");
+            return;
+        }
+
+        if (clickExactAction(root, new String[]{"save", "บันทึก"})) {
+            setStep(APPLY, "กด Save แล้ว กำลังรอปุ่ม Apply");
+        } else {
+            setStatus("กรอกที่อยู่และเลือกเขต/ตำบลครบแล้ว แต่ยังไม่พบปุ่ม Save");
+        }
+    }
+
+    private void doApply(AccessibilityNodeInfo root) {
+        if (hasAny(root, "application submitted", "submitted successfully",
+                "ส่งใบสมัครเรียบร้อย", "สมัครสำเร็จ")) {
+            stopWith("ส่งใบสมัครแล้ว");
+            return;
+        }
+
+        if (clickExactAction(root, new String[]{"apply", "apply now", "ยื่นใบสมัคร", "สมัคร"})) {
+            stopWith("กด Apply แล้ว กรุณาตรวจผลบนหน้าจอ Makro PRO");
+            return;
+        }
+
+        setStatus("บันทึกที่อยู่แล้ว กำลังรอปุ่ม Apply สีแดง");
+    }
+
+    private void scrollAddressForm(AccessibilityNodeInfo root, String message) {
+        int scrolls = state().getInt("address_scrolls", 0);
+        AccessibilityNodeInfo scrollable = findScrollable(root);
+        if (scrollable != null && scrolls < 8 &&
+                scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
+            state().edit().putInt("address_scrolls", scrolls + 1)
+                    .putString("status", message).apply();
+        } else if (scrolls >= 8) {
+            stopWith(message + " — ยังไม่พบช่องหรือรายการที่ต้องเลือก กรุณาตรวจหน้าจอ");
+        } else {
+            setStatus(message);
+        }
+    }
+
+    private AccessibilityNodeInfo findExactText(AccessibilityNodeInfo root, String... values) {
+        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+        collectNodes(root, nodes, 0);
+        for (AccessibilityNodeInfo node : nodes) {
+            if (!node.isVisibleToUser()) continue;
+            String text = textOf(node).toLowerCase(Locale.ROOT).trim()
+                    .replaceAll("\\s+", " ");
+            for (String value : values) {
+                String wanted = value.toLowerCase(Locale.ROOT).trim()
+                        .replaceAll("\\s+", " ");
+                if (text.equals(wanted) || text.startsWith(wanted + " ")) return node;
+            }
+        }
+        return null;
+    }
+
+    private boolean clickExactAction(AccessibilityNodeInfo root, String[] values) {
+        AccessibilityNodeInfo node = findExactText(root, values);
+        return node != null && clickNodeOrTap(node);
+    }
+
+    private AccessibilityNodeInfo findControlForLabel(AccessibilityNodeInfo root, String... labels) {
+        AccessibilityNodeInfo field = findFieldForLabel(root, labels);
+        if (field != null) return field;
+
+        List<AccessibilityNodeInfo> all = new ArrayList<>();
+        collectNodes(root, all, 0);
+        for (AccessibilityNodeInfo labelNode : all) {
+            if (!labelNode.isVisibleToUser()) continue;
+            String labelText = textOf(labelNode).toLowerCase(Locale.ROOT).trim();
+            boolean match = false;
+            for (String label : labels) {
+                if (labelText.equals(label.toLowerCase(Locale.ROOT)) ||
+                        labelText.startsWith(label.toLowerCase(Locale.ROOT) + " ")) {
+                    match = true;
+                    break;
+                }
+            }
+            if (!match) continue;
+
+            AccessibilityNodeInfo parent = labelNode.getParent();
+            if (parent != null && parent.isVisibleToUser() &&
+                    parent.isEnabled() && parent.isClickable()) return parent;
+
+            Rect labelBounds = new Rect();
+            labelNode.getBoundsInScreen(labelBounds);
+            AccessibilityNodeInfo best = null;
+            long bestScore = Long.MAX_VALUE;
+            for (AccessibilityNodeInfo candidate : all) {
+                if (candidate == labelNode || !candidate.isVisibleToUser() ||
+                        !candidate.isEnabled() || !(candidate.isClickable() || candidate.isEditable())) continue;
+                Rect r = new Rect();
+                candidate.getBoundsInScreen(r);
+                if (r.isEmpty()) continue;
+                int gap = r.top - labelBounds.bottom;
+                if (gap < -dp(20) || gap > dp(150)) continue;
+                int overlap = Math.min(r.right, labelBounds.right) -
+                        Math.max(r.left, labelBounds.left);
+                if (overlap <= 0 && Math.abs(r.centerX() - labelBounds.centerX()) > dp(110)) continue;
+                long score = (long) Math.max(0, gap) * 1000L +
+                        Math.abs(r.centerX() - labelBounds.centerX());
+                if (score < bestScore) {
+                    bestScore = score;
+                    best = candidate;
+                }
+            }
+            if (best != null) return best;
+        }
+        return null;
     }
 
     private AccessibilityNodeInfo findFieldForLabel(AccessibilityNodeInfo root, String... labels) {
