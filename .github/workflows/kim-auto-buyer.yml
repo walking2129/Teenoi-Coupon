@@ -1,4 +1,4 @@
-name: Build Kim Auto Buyer APK
+name: Build and publish Kim Auto Buyer updates
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -19,27 +19,91 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
       - name: Install Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+
       - name: Prepare Android SDK
         shell: bash
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-      - name: Build debug APK
+
+      - name: Check release signing configuration
+        id: signing
+        shell: bash
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE_BASE64" ] && [ -n "$SIGNING_STORE_PASSWORD" ] && [ -n "$SIGNING_KEY_ALIAS" ] && [ -n "$SIGNING_KEY_PASSWORD" ]; then
+            echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/kim-autobuyer-release.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/kim-autobuyer-release.jks" >> "$GITHUB_ENV"
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Release signing secrets are not configured. Building debug APK for compile verification only; no public update will be published."
+          fi
+
+      - name: Build signed release APK
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: gradle --no-daemon -p KimAutoBuyer assembleRelease
+
+      - name: Build debug APK for compile verification
+        if: steps.signing.outputs.configured != 'true'
         run: gradle --no-daemon -p KimAutoBuyer assembleDebug
-      - name: Upload installable APK
+
+      - name: Publish signed APK and update manifest
+        if: steps.signing.outputs.configured == 'true'
+        shell: bash
+        run: |
+          mkdir -p update-server
+          cp KimAutoBuyer/app/build/outputs/apk/release/app-release.apk update-server/KimAutoBuyer.apk
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          metadata_path = Path("KimAutoBuyer/app/build/outputs/apk/release/output-metadata.json")
+          metadata = json.loads(metadata_path.read_text())
+          element = metadata["elements"][0]
+          apk = Path("update-server/KimAutoBuyer.apk")
+          manifest = {
+              "versionCode": int(element["versionCode"]),
+              "versionName": element["versionName"],
+              "apkUrl": f"https://walking2129.github.io/Teenoi-Coupon/update-server/KimAutoBuyer.apk?version={element['versionCode']}",
+              "sha256": hashlib.sha256(apk.read_bytes()).hexdigest()
+          }
+          Path("update-server/latest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Commit update files for GitHub Pages
+        if: steps.signing.outputs.configured == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Publish Kim Auto Buyer update"
+          file_pattern: update-server/KimAutoBuyer.apk update-server/latest.json
+
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KimAutoBuyer-debug-apk
-          path: KimAutoBuyer/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          name: KimAutoBuyer-release-or-debug
+          path: |
+            KimAutoBuyer/app/build/outputs/apk/release/app-release.apk
+            KimAutoBuyer/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
           retention-days: 14
