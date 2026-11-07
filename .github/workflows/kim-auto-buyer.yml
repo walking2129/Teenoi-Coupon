@@ -42,26 +42,32 @@ jobs:
         id: signing
         shell: bash
         env:
-          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          KIM_AUTOBUYER_SIGNING: ${{ secrets.KIM_AUTOBUYER_SIGNING }}
         run: |
-          if [ -n "$SIGNING_KEYSTORE_BASE64" ] && [ -n "$SIGNING_STORE_PASSWORD" ] && [ -n "$SIGNING_KEY_ALIAS" ] && [ -n "$SIGNING_KEY_PASSWORD" ]; then
-            echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/kim-autobuyer-release.jks"
-            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/kim-autobuyer-release.jks" >> "$GITHUB_ENV"
+          if [ -n "$KIM_AUTOBUYER_SIGNING" ]; then
+            python3 - <<'PY'
+          import base64, json, os
+          from pathlib import Path
+          cfg = json.loads(os.environ["KIM_AUTOBUYER_SIGNING"])
+          key = base64.b64decode(cfg["keystoreBase64"], validate=True)
+          key_path = Path(os.environ["RUNNER_TEMP"]) / "kim-autobuyer-release.jks"
+          key_path.write_bytes(key)
+          if not cfg.get("storePassword") or not cfg.get("keyPassword") or not cfg.get("keyAlias"):
+              raise SystemExit("Signing secret is missing a required field")
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write(f"ANDROID_KEYSTORE_PATH={key_path}\n")
+              env.write(f"SIGNING_STORE_PASSWORD={cfg['storePassword']}\n")
+              env.write(f"SIGNING_KEY_ALIAS={cfg['keyAlias']}\n")
+              env.write(f"SIGNING_KEY_PASSWORD={cfg['keyPassword']}\n")
+          PY
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Release signing secrets are not configured. Building debug APK for compile verification only; no public update will be published."
+            echo "::warning::KIM_AUTOBUYER_SIGNING is not configured. Building debug APK for compile verification only; no public update will be published."
           fi
 
       - name: Build signed release APK
         if: steps.signing.outputs.configured == 'true'
-        env:
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: gradle --no-daemon -p KimAutoBuyer assembleRelease
 
       - name: Build debug APK for compile verification
