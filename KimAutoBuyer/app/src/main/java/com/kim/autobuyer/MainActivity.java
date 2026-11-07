@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
     private EditText passportNumberInput;
     private CheckBox rememberBox;
     private TextView statusView;
+    private AppUpdater appUpdater;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,6 +39,7 @@ public class MainActivity extends Activity {
         buildScreen();
         loadCredentials();
         refreshStatus();
+        appUpdater = new AppUpdater(this);
     }
 
     private void buildScreen() {
@@ -110,6 +112,10 @@ public class MainActivity extends Activity {
             refreshStatus();
             Toast.makeText(this, "หยุดการทำงานแล้ว", Toast.LENGTH_SHORT).show();
         });
+
+        Button update = button("ตรวจสอบและติดตั้งอัปเดต");
+        page.addView(update, buttonParams());
+        update.setOnClickListener(v -> appUpdater.checkForUpdates());
 
         statusView = new TextView(this);
         statusView.setTextSize(14);
@@ -291,5 +297,12 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshStatus();
+        if (appUpdater != null) appUpdater.resumePendingInstall();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (appUpdater != null) appUpdater.close();
+        super.onDestroy();
     }
 }
