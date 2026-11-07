@@ -36,7 +36,7 @@ The first installation signed with this permanent key must replace the currently
 
 Install the app, open it, enable its Accessibility service in Android Settings, return to the app, save the login details, and press Start. Keep Makro PRO in the foreground during automated taps. Android exposes an actionable accessibility tree for the foreground window; changing to another app pauses actionable control until Makro PRO is foreground again.
 
-For app updates, press **ตรวจสอบและติดตั้งอัปเดต** in Kim Auto Buyer. The app may request the Android permission to install packages from this source once. Android will still show its standard confirmation screen for each APK update.
+For app updates, press **ตรวจสอบและติดตั้งอัปเดต** in Kim Auto Buyer. The app may request the Android permission to install packages from this source once. The updater requests Android's supported self-update mode that may avoid a confirmation screen for eligible self-updates. Android can still require user action depending on device policy, installer state, or security checks; the app does not bypass Play Protect.
 
 ## Security and limitations
 
