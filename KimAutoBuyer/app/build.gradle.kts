@@ -8,8 +8,8 @@ android {
         applicationId = "com.kim.autobuyer"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -18,4 +18,5 @@ android {
 }
 dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.core:core:1.15.0")
 }
