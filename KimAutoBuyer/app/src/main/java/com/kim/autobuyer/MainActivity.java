@@ -222,6 +222,7 @@ public class MainActivity extends Activity {
         getSharedPreferences("state", MODE_PRIVATE).edit()
                 .putBoolean("running", true).putInt("step", 0)
                 .putLong("passport_clicked_at", 0L)
+                .putInt("passport_attempts", 0)
                 .putString("target_package", pkg)
                 .putString("status", "กำลังเปิด Makro PRO").apply();
         Intent launch = getPackageManager().getLaunchIntentForPackage(pkg);
@@ -255,7 +256,8 @@ public class MainActivity extends Activity {
         android.content.SharedPreferences s = getSharedPreferences("state", MODE_PRIVATE);
         String status = s.getString("status", "พร้อมเริ่ม");
         boolean running = s.getBoolean("running", false);
-        statusView.setText("สถานะ: " + status + (running ? "\nระบบกำลังรอ/ตรวจจับหน้าจอ" : ""));
+        String debug = s.getString("last_debug", "ยังไม่มีข้อมูลหน้าจอ");
+        statusView.setText("สถานะ: " + status + (running ? "\nระบบกำลังตรวจจับหน้าจอ" : "") + "\n\nข้อมูลหน้าจอล่าสุด: " + debug);
     }
 
     @Override
