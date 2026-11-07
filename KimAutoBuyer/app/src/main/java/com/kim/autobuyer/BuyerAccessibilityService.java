@@ -797,7 +797,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
         for (AccessibilityNodeInfo n : nodes) {
             if (n.isClickable()) clickable++;
             if (n.isEditable()) editable++;
-            if (n.isClickable() || n.isCheckable()) {
+            // Editable controls may contain private user-entered values.
+            // Keep them out of diagnostic text stored in ordinary preferences.
+            if (!n.isEditable() && (n.isClickable() || n.isCheckable())) {
                 String label = textOf(n).trim();
                 if (!label.isEmpty() && labels.length() < 500) labels.append(" [").append(label).append("]");
             }
