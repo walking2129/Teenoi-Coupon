@@ -42,6 +42,8 @@ public class BuyerAccessibilityService extends AccessibilityService {
     private static final int CHECKOUT = 13;
     private static final int PAYMENT = 14;
     private static final int DONE = 15;
+    private static final int CART_ADDRESS = 16;
+    private static final int COUPON = 17;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean tickQueued = false;
@@ -157,6 +159,12 @@ public class BuyerAccessibilityService extends AccessibilityService {
                 break;
             case VERIFY_CART:
                 doVerifyCart(root);
+                break;
+            case CART_ADDRESS:
+                doCartAddress(root);
+                break;
+            case COUPON:
+                doCoupon(root);
                 break;
             case CHECKOUT:
                 doCheckout(root);
@@ -1144,6 +1152,34 @@ public class BuyerAccessibilityService extends AccessibilityService {
     }
 
     private void doVerifyCart(AccessibilityNodeInfo root) {
+        if (!state().getBoolean("cart_address_saved", false)) {
+            if (isCartAddressDialog(root)) {
+                setStep(CART_ADDRESS, "พบหน้าต่าง My Address ในตะกร้า กำลังกรอกที่อยู่จัดส่ง");
+                return;
+            }
+            AccessibilityNodeInfo delivery = findOptionText(root, "delivery at", "จัดส่งที่", "delivery address");
+            AccessibilityNodeInfo button = findClickableAncestor(delivery, null);
+            if (button != null && isReasonableAction(button) &&
+                    button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                state().edit().putLong("cart_address_opened_at", System.currentTimeMillis()).apply();
+                setStatus("เปิดที่อยู่จัดส่งแล้ว กำลังรอหน้าต่าง My Address");
+            } else {
+                setStatus("กำลังรอแถว Delivery At เพื่อเปิดที่อยู่จัดส่ง");
+            }
+            return;
+        }
+        if (!state().getBoolean("coupon_applied", false)) {
+            AccessibilityNodeInfo coupon = findOptionText(root, "coupon");
+            AccessibilityNodeInfo select = findExactText(root, "select");
+            AccessibilityNodeInfo target = findClickableAncestor(coupon, null);
+            if (target == null) target = findClickableAncestor(select, null);
+            if (target != null && isReasonableAction(target) &&
+                    target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                state().edit().putLong("coupon_opened_at", System.currentTimeMillis()).apply();
+                setStep(COUPON, "เปิดรายการ Coupon แล้ว กำลังเลือกคูปองรายการแรก");
+            } else setStatus("กำลังรอแถว Coupon/Select ในตะกร้า");
+            return;
+        }
         boolean heading = hasCartHeading(root);
         boolean productEvidence = hasCartProductEvidence(root);
         boolean totalEvidence = hasCartTotalEvidence(root);
@@ -1166,6 +1202,67 @@ public class BuyerAccessibilityService extends AccessibilityService {
         }
         setStatus("กำลังตรวจหน้าตะกร้า: หัวข้อ=" + heading + ", สินค้า=" +
                 productEvidence + ", ยอดรวม=" + totalEvidence + ", ปุ่มดำเนินการ=" + actionEvidence);
+    }
+
+    private boolean isCartAddressDialog(AccessibilityNodeInfo root) {
+        return hasAny(root, "my address", "basic info", "street name, building, house no.") &&
+                hasAny(root, "save", "บันทึก");
+    }
+
+    private void doCartAddress(AccessibilityNodeInfo root) {
+        AccessibilityNodeInfo phone = findFieldForLabel(root, "phone number", "เบอร์โทรศัพท์");
+        if (phone != null && !dateTextMatches(textOf(phone), "0945674577")) {
+            if (setNodeTextVerified(phone, "0945674577")) {
+                setStatus("กรอกเบอร์ที่อยู่จัดส่งแล้ว");
+            } else setStatus("พบช่อง Phone Number แต่ยืนยันค่าไม่ได้");
+            return;
+        }
+        AccessibilityNodeInfo address = findFieldForLabel(root,
+                "street name, building, house no.", "street name", "building", "house no.", "address");
+        if (address != null && !dateTextMatches(textOf(address), "88/121")) {
+            if (setNodeTextVerified(address, "88/121")) {
+                setStatus("กรอกที่อยู่จัดส่ง 88/121 แล้ว");
+            } else setStatus("พบช่อง Street Name แต่ยืนยันค่าไม่ได้");
+            return;
+        }
+        AccessibilityNodeInfo save = findExactText(root, "save", "บันทึก");
+        AccessibilityNodeInfo button = findClickableAncestor(save, null);
+        if (button != null && isReasonableAction(button) &&
+                button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            state().edit().putBoolean("cart_address_saved", true)
+                    .putLong("cart_address_saved_at", System.currentTimeMillis())
+                    .putString("status", "บันทึกที่อยู่จัดส่งแล้ว กำลังกลับไปตะกร้า").apply();
+        } else setStatus("กรอกเบอร์/ที่อยู่แล้ว กำลังรอปุ่ม Save ของ My Address");
+    }
+
+    private void doCoupon(AccessibilityNodeInfo root) {
+        AccessibilityNodeInfo choice = findFirstSelectable(root);
+        if (choice != null && !state().getBoolean("coupon_choice_clicked", false)) {
+            if (choice.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                state().edit().putBoolean("coupon_choice_clicked", true).apply();
+                setStatus("เลือกคูปองรายการแรกแล้ว กำลังรอปุ่ม Apply");
+            } else setStatus("พบรายการคูปองแต่เลือกไม่ได้");
+            return;
+        }
+        AccessibilityNodeInfo apply = findExactText(root, "apply", "ใช้คูปอง", "ยืนยัน");
+        AccessibilityNodeInfo button = findClickableAncestor(apply, null);
+        if (button != null && isReasonableAction(button) &&
+                button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            state().edit().putBoolean("coupon_applied", true)
+                    .putLong("coupon_applied_at", System.currentTimeMillis())
+                    .putString("status", "กด Apply คูปองแล้ว กำลังตรวจผลในตะกร้า").apply();
+        } else setStatus("เลือกคูปองแล้ว กำลังรอปุ่ม Apply");
+    }
+
+    private AccessibilityNodeInfo findFirstSelectable(AccessibilityNodeInfo root) {
+        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+        collectNodes(root, nodes, 0);
+        for (AccessibilityNodeInfo node : nodes) {
+            if (!node.isVisibleToUser() || !node.isEnabled() || !node.isClickable()) continue;
+            String cls = node.getClassName() == null ? "" : node.getClassName().toString();
+            if (cls.endsWith("RadioButton") || cls.endsWith("CheckBox")) return node;
+        }
+        return null;
     }
 
     private void doCheckout(AccessibilityNodeInfo root) {

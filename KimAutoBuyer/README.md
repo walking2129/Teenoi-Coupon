@@ -4,7 +4,7 @@ Android accessibility helper for the user's own Makro PRO account and card appli
 
 ## Current app build
 
-- Version: 2.2 (versionCode 13)
+- Version: 2.3 (versionCode 14)
 - Android minSdk: 26
 - The in-app updater checks the public GitHub Pages manifest at:
   `https://walking2129.github.io/Teenoi-Coupon/update-server/latest.json`
@@ -39,6 +39,8 @@ The first installation signed with this permanent key must replace the currently
 The app includes a separate learning mode. Stop automation, press “เริ่มบันทึกการสาธิต”, perform the Makro PRO flow manually, then press “หยุดบันทึกการสาธิต” and “ส่งออกข้อมูลการสาธิต”. The exported JSONL records Accessibility event types, resource IDs, classes, bounds, labels for non-editable controls, and checked/clickable state. Values entered into editable fields—including passwords, phone numbers, Passport numbers, dates, and addresses—are masked and are never written to the demonstration log. Credentials remain only in the existing Android Keystore-backed encrypted preferences.
 
 The automation uses the IDs observed in the manual demonstration: `form_welcome_userid`, `form_onboard_login_password`, `passport`, `form_MMID_documentNumber`, `form_MMID_dob`, `form_MMID_referrerCode`, `form_MMID_address1`, `form_MMID_zipCode`, `form_REG_province_id`, `form_REG_district_id`, `form_REG_subDistrict_id`, `btn_go_to_checkout`, `btn_go_to_payment`, `btn_credit_debit_card`, and `btn_pay`. It verifies the cart and advances to the Pay screen. For safety, it stops at the final Pay button so the user can review the amount and complete any payment/OTP/3-D Secure confirmation manually.
+
+Version 2.3 adds the demonstrated basket flow before Checkout: it opens the `Delivery At` address row, fills the delivery phone `0945674577` and `Street Name, Building, House No.` with `88/121`, saves `My Address`, opens the Coupon `Select` row, selects the first available coupon, presses `Apply`, and only then advances to Checkout. The remaining optional address fields are left unchanged/blank rather than guessed.
 
 ## Device setup
 
