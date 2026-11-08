@@ -5,11 +5,11 @@ android {
     namespace = "com.kim.autobuyer"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.kim.autobuyer"
+        applicationId = "com.kim.autobuyer.next"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
     }
     signingConfigs {
         create("release") {
