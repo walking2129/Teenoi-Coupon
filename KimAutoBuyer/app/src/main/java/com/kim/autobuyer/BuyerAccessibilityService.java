@@ -182,7 +182,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
                 return;
             }
             if (field != null) setNodeText(field, phone);
-            if (clickAction(root, new String[]{"continue", "ดำเนินการต่อ", "ถัดไป", "ยืนยัน"}, true)) {
+            if (clickAction(root, new String[]{"continue", "ดำเนินการต่อ", "ถัดไป", "ยืนยัน"}, false)) {
                 setStep(PASSWORD, "กรอกเบอร์/อีเมลแล้ว กด Continue แล้ว กำลังรอหน้ารหัสผ่าน");
             } else {
                 setStatus("กรอกเบอร์แล้ว แต่ยังหาปุ่ม Continue ไม่พบ — เก็บหน้าจอไว้ตรวจสอบ");
@@ -406,12 +406,21 @@ public class BuyerAccessibilityService extends AccessibilityService {
         }
         AccessibilityNodeInfo control = findControlForLabel(root, labels);
         if (control != null) {
-            if (!state().getBoolean("dob_focus_requested", false) &&
-                    control.performAction(AccessibilityNodeInfo.ACTION_FOCUS)) {
+            if (!state().getBoolean("dob_focus_requested", false)) {
+                boolean focused = control.performAction(AccessibilityNodeInfo.ACTION_FOCUS) ||
+                        control.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
                 state().edit().putBoolean("dob_focus_requested", true)
-                        .putString("status", "โฟกัสช่องวันเกิดแล้ว กำลังอ่านช่องข้อความใหม่").apply();
+                        .putLong("dob_focus_requested_at", System.currentTimeMillis()).apply();
+                setStatus(focused
+                        ? "โฟกัสช่องวันเกิดแล้ว กำลังอ่านช่องข้อความใหม่ โดยไม่เปิดปฏิทิน"
+                        : "พบกรอบวันเกิดแต่โฟกัสไม่ได้ กำลังรอ input ข้อความโดยไม่เปิดปฏิทิน");
             } else {
-                setStatus("กำลังรอช่องข้อความวันเกิดหลังโฟกัส — ไม่เปิด Date Picker");
+                long requestedAt = state().getLong("dob_focus_requested_at", 0L);
+                if (requestedAt > 0L && System.currentTimeMillis() - requestedAt > 6000L) {
+                    stopWith("ช่องวันเกิดไม่แสดงเป็น input ข้อความหลังโฟกัส จึงหยุดโดยไม่เปิด Date Picker");
+                } else {
+                    setStatus("กำลังรอช่องข้อความวันเกิดหลังโฟกัส — ไม่เปิดปฏิทิน");
+                }
             }
             return true;
         }
@@ -1037,7 +1046,12 @@ public class BuyerAccessibilityService extends AccessibilityService {
             return;
         }
         if (state().getBoolean("back_requested", false)) {
-            setStatus("กด Global Back ไปแล้วหนึ่งครั้ง กำลังรอหน้า Home โดยไม่กดซ้ำ");
+            long requestedAt = state().getLong("back_requested_at", 0L);
+            if (requestedAt > 0L && System.currentTimeMillis() - requestedAt > 15000L) {
+                stopWith("กด Global Back หนึ่งครั้งแล้วแต่ไม่พบหน้า Home จึงหยุดโดยไม่กด Back ซ้ำ");
+            } else {
+                setStatus("กด Global Back ไปแล้วหนึ่งครั้ง กำลังรอหน้า Home โดยไม่กดซ้ำ");
+            }
             return;
         }
         if (performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) {
@@ -1082,19 +1096,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
                 rightmost = rect.centerX();
             }
         }
-        if (best != null) return best;
-        List<AccessibilityNodeInfo> fallback = new ArrayList<>();
-        for (AccessibilityNodeInfo node : nodes) {
-            if (!node.isVisibleToUser() || !node.isEnabled() || !node.isClickable() ||
-                    !isSmallControl(node)) continue;
-            Rect rect = boundsOf(node);
-            if (rect.centerX() <= sw * 0.65f || rect.centerY() >= sh * 0.30f) continue;
-            String cls = node.getClassName() == null ? "" :
-                    node.getClassName().toString().toLowerCase(Locale.ROOT);
-            if ((cls.contains("imagebutton") || cls.contains("button")) &&
-                    hasExactLabel(node, "2")) fallback.add(node);
-        }
-        return fallback.size() == 1 ? fallback.get(0) : null;
+        // Do not infer Cart from a numeric badge (for example "2").
+        // Without cart text/contentDescription/resource ID, wait rather than tap an unknown icon.
+        return best;
     }
 
     private void doVerifyCart(AccessibilityNodeInfo root) {
@@ -1610,18 +1614,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
     }
 
     private boolean clickNodeOrTap(AccessibilityNodeInfo node) {
-        AccessibilityNodeInfo current = node;
-        for (int i = 0; current != null && i < 10; i++) {
-            if (current.isEnabled() && current.isClickable() &&
-                    current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true;
-            current = current.getParent();
-        }
-        Rect bounds = new Rect();
-        node.getBoundsInScreen(bounds);
-        if (bounds.width() > 0 && bounds.height() > 0) {
-            return tap(bounds.centerX(), bounds.centerY());
-        }
-        return false;
+        AccessibilityNodeInfo button = findClickableAncestor(node, null);
+        return button != null && isReasonableAction(button) &&
+                button.performAction(AccessibilityNodeInfo.ACTION_CLICK);
     }
 
     // Fallback for custom buttons that Android exposes as clickable containers
