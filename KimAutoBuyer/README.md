@@ -4,7 +4,7 @@ Android accessibility helper for the user's own Makro PRO account and card appli
 
 ## Current app build
 
-- Version: 2.0 (versionCode 11)
+- Version: 2.1 (versionCode 12)
 - Android minSdk: 26
 - The in-app updater checks the public GitHub Pages manifest at:
   `https://walking2129.github.io/Teenoi-Coupon/update-server/latest.json`
@@ -33,6 +33,10 @@ The first installation signed with this permanent key must replace the currently
 7. Tap the actual Add address button, fill Address 888 and Postal code 20000, then select the first newly displayed District option and the first newly displayed Sub-district option. Save the address overlay, verify it closes, and then tap Apply.
 8. Wait for Home, fill the product search field with คาราบาว without pressing Search or Enter, then set only the first two CARABAO product rows to quantities 3 and 2 using their own + controls. Each increment is checked before another click.
 9. Use one Android Global Back action to return to Home, identify the top-right Cart control by its accessible label/resource ID (never by badge number alone), open it, and verify the cart screen before stopping.
+
+## Manual demonstration learning mode
+
+The app includes a separate learning mode. Stop automation, press “เริ่มบันทึกการสาธิต”, perform the Makro PRO flow manually, then press “หยุดบันทึกการสาธิต” and “ส่งออกข้อมูลการสาธิต”. The exported JSONL records Accessibility event types, resource IDs, classes, bounds, labels for non-editable controls, and checked/clickable state. Values entered into editable fields—including passwords, phone numbers, Passport numbers, dates, and addresses—are masked and are never written to the demonstration log. Credentials remain only in the existing Android Keystore-backed encrypted preferences.
 
 ## Device setup
 

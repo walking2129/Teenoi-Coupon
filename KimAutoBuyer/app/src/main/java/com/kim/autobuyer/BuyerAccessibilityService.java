@@ -53,6 +53,10 @@ public class BuyerAccessibilityService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (state().getBoolean("learning_recording", false)) {
+            LearningRecorder.record(this, event, getRootInActiveWindow());
+            return;
+        }
         if (isRunning()) scheduleTick(450);
     }
 
@@ -85,7 +89,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
     }
 
     private void runStep() {
-        if (!isRunning()) return;
+        if (!isRunning() || state().getBoolean("learning_recording", false)) return;
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) {
             scheduleTick(1000);

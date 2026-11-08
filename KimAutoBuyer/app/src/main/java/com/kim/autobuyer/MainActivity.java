@@ -103,6 +103,29 @@ public class MainActivity extends Activity {
         page.addView(start, buttonParams());
         start.setOnClickListener(v -> startAutomation());
 
+        TextView learningTitle = label("โหมดเรียนรู้จากการสาธิต (กดมือเอง)");
+        page.addView(learningTitle);
+        Button learnStart = button("เริ่มบันทึกการสาธิต");
+        page.addView(learnStart, buttonParams());
+        learnStart.setOnClickListener(v -> startLearning());
+
+        Button learnStop = button("หยุดบันทึกการสาธิต");
+        learnStop.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF777777));
+        page.addView(learnStop, buttonParams());
+        learnStop.setOnClickListener(v -> stopLearning());
+
+        Button learnExport = button("ส่งออกข้อมูลการสาธิต");
+        page.addView(learnExport, buttonParams());
+        learnExport.setOnClickListener(v -> exportLearning());
+
+        Button learnClear = button("ล้างข้อมูลการสาธิต");
+        page.addView(learnClear, buttonParams());
+        learnClear.setOnClickListener(v -> {
+            LearningRecorder.clear(this);
+            Toast.makeText(this, "ล้างข้อมูลการสาธิตแล้ว", Toast.LENGTH_SHORT).show();
+            refreshStatus();
+        });
+
         Button stop = button("หยุดการทำงาน");
         stop.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF777777));
         page.addView(stop, buttonParams());
@@ -209,6 +232,12 @@ public class MainActivity extends Activity {
     }
 
     private void startAutomation() {
+        if (getSharedPreferences("state", MODE_PRIVATE)
+                .getBoolean("learning_recording", false)) {
+            Toast.makeText(this, "กรุณาหยุดโหมดเรียนรู้ก่อนเริ่มระบบอัตโนมัติ",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
         String phone = phoneInput.getText().toString().trim();
         String password = passwordInput.getText().toString();
         String passportNumber = passportNumberInput.getText().toString().trim();
@@ -300,6 +329,55 @@ public class MainActivity extends Activity {
         refreshStatus();
     }
 
+    private void startLearning() {
+        if (!accessibilityEnabled()) {
+            Toast.makeText(this, "กรุณาเปิดสิทธิ์ Accessibility ก่อนเริ่มบันทึก",
+                    Toast.LENGTH_LONG).show();
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            return;
+        }
+        getSharedPreferences("state", MODE_PRIVATE).edit()
+                .putBoolean("running", false)
+                .putBoolean("learning_recording", true)
+                .putString("status", "กำลังบันทึกการสาธิต — กดมือใน Makro PRO ได้เลย")
+                .apply();
+        LearningRecorder.clear(this);
+        Toast.makeText(this,
+                "เริ่มบันทึกแล้ว: ทำขั้นตอนใน Makro PRO ด้วยมือทีละขั้น",
+                Toast.LENGTH_LONG).show();
+        refreshStatus();
+    }
+
+    private void stopLearning() {
+        getSharedPreferences("state", MODE_PRIVATE).edit()
+                .putBoolean("learning_recording", false)
+                .putString("status", "หยุดบันทึกการสาธิตแล้ว ขนาดไฟล์ " +
+                        LearningRecorder.size(this) + " ไบต์")
+                .apply();
+        refreshStatus();
+    }
+
+    private void exportLearning() {
+        java.io.File f = LearningRecorder.file(this);
+        if (!f.exists() || f.length() == 0L) {
+            Toast.makeText(this, "ยังไม่มีข้อมูลการสาธิตให้ส่งออก", Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                    this, getPackageName() + ".fileprovider", f);
+            Intent share = new Intent(Intent.ACTION_SEND);
+            share.setType("application/jsonl");
+            share.putExtra(Intent.EXTRA_SUBJECT, "Kim Auto Buyer manual demonstration");
+            share.putExtra(Intent.EXTRA_STREAM, uri);
+            share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(share, "ส่งออกข้อมูลการสาธิต"));
+        } catch (Exception e) {
+            Toast.makeText(this, "ส่งออกข้อมูลไม่สำเร็จ: " + e.getMessage(),
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
     private ResolveInfo findMakroLauncher() {
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -322,7 +400,11 @@ public class MainActivity extends Activity {
         String status = s.getString("status", "พร้อมเริ่ม");
         boolean running = s.getBoolean("running", false);
         String debug = s.getString("last_debug", "ยังไม่มีข้อมูลหน้าจอ");
-        statusView.setText("สถานะ: " + status + (running ? "\nระบบกำลังตรวจจับหน้าจอ" : "") + "\n\nข้อมูลหน้าจอล่าสุด: " + debug);
+        boolean learning = s.getBoolean("learning_recording", false);
+        statusView.setText("สถานะ: " + status +
+                (running ? "\nระบบกำลังตรวจจับหน้าจอ" : "") +
+                (learning ? "\nโหมดเรียนรู้กำลังบันทึก" : "") +
+                "\n\nข้อมูลหน้าจอล่าสุด: " + debug);
     }
 
     @Override
