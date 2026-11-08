@@ -39,7 +39,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
     private static final int RETURN_HOME = 10;
     private static final int OPEN_CART = 11;
     private static final int VERIFY_CART = 12;
-    private static final int DONE = 13;
+    private static final int CHECKOUT = 13;
+    private static final int PAYMENT = 14;
+    private static final int DONE = 15;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean tickQueued = false;
@@ -156,6 +158,12 @@ public class BuyerAccessibilityService extends AccessibilityService {
             case VERIFY_CART:
                 doVerifyCart(root);
                 break;
+            case CHECKOUT:
+                doCheckout(root);
+                break;
+            case PAYMENT:
+                doPayment(root);
+                break;
             case DONE:
                 stopWith("เปิดหน้าตะกร้าเรียบร้อยแล้ว");
                 break;
@@ -178,7 +186,8 @@ public class BuyerAccessibilityService extends AccessibilityService {
 
         boolean phoneForm = hasAny(root, "mobile number", "phone number", "email address",
                 "enter phone", "เบอร์โทร", "หมายเลขมือถือ", "อีเมล", "เบอร์โทรศัพท์");
-        AccessibilityNodeInfo field = findEditable(root, false);
+        AccessibilityNodeInfo field = findResourceId(root, "form_welcome_userid", true);
+        if (field == null) field = findEditable(root, false);
         if (phoneForm || (field != null && hasAny(root, "continue", "ดำเนินการต่อ", "ถัดไป"))) {
             String phone = readCredentials("phone");
             if (phone.isEmpty()) {
@@ -230,7 +239,8 @@ public class BuyerAccessibilityService extends AccessibilityService {
             stopWith("ไม่พบรหัสผ่านที่บันทึกไว้");
             return;
         }
-        AccessibilityNodeInfo field = findEditable(root, true);
+        AccessibilityNodeInfo field = findResourceId(root, "form_onboard_login_password", true);
+        if (field == null) field = findEditable(root, true);
         if (field == null || !setNodeText(field, password)) {
             setStatus("พบหน้ารหัสผ่าน แต่ยังใส่รหัสผ่านในช่องไม่ได้");
             return;
@@ -291,8 +301,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
             return;
         }
 
-        AccessibilityNodeInfo passport = findText(root, "passport", "หนังสือเดินทาง");
-        if (passport != null && clickPassportOption(root, passport)) {
+        AccessibilityNodeInfo passport = findResourceId(root, "passport", false);
+        if (passport == null) passport = findText(root, "passport", "หนังสือเดินทาง");
+        if (passport != null && (clickResourceId(root, "passport") || clickPassportOption(root, passport))) {
             state().edit()
                     .putLong("passport_clicked_at", System.currentTimeMillis())
                     .putInt("passport_attempts", attempts + 1)
@@ -343,7 +354,8 @@ public class BuyerAccessibilityService extends AccessibilityService {
             String[] labels = ruleLabels("passportNumberLabels",
                     "passport number", "passport no", "passport no.", "passport number (as shown)",
                     "เลขที่หนังสือเดินทาง", "หมายเลขหนังสือเดินทาง");
-            AccessibilityNodeInfo field = findFieldForLabel(root, labels);
+            AccessibilityNodeInfo field = findResourceId(root, "form_MMID_documentNumber", true);
+            if (field == null) field = findFieldForLabel(root, labels);
             if (field != null) {
                 if (setNodeTextVerified(field, number)) {
                     state().edit().putBoolean("passport_number_filled", true).apply();
@@ -367,7 +379,8 @@ public class BuyerAccessibilityService extends AccessibilityService {
             String[] labels = ruleLabels("referrerCodeLabels",
                     "referrer code", "referral code", "referrer", "referral",
                     "รหัสผู้แนะนำ", "รหัสแนะนำ");
-            AccessibilityNodeInfo field = findFieldForLabel(root, labels);
+            AccessibilityNodeInfo field = findResourceId(root, "form_MMID_referrerCode", true);
+            if (field == null) field = findFieldForLabel(root, labels);
             if (field != null) {
                 // WIEX2PIW is already confirmed by the user to be in the correct Referral code field.
                 if (setNodeTextVerified(field, "WIEX2PIW")) {
@@ -409,7 +422,8 @@ public class BuyerAccessibilityService extends AccessibilityService {
     private boolean handleDateOfBirth(AccessibilityNodeInfo root) {
         String[] labels = ruleLabels("dateOfBirthLabels",
                 "date of birth", "dob", "วันเดือนปีเกิด", "วันเกิด");
-        AccessibilityNodeInfo field = findFieldForLabel(root, labels);
+        AccessibilityNodeInfo field = findResourceId(root, "form_MMID_dob", true);
+        if (field == null) field = findFieldForLabel(root, labels);
         if (field != null) {
             if (dateTextMatches(textOf(field), "21/11/1986")) {
                 state().edit().putBoolean("dob_filled", true).remove("dob_focus_requested").apply();
@@ -496,7 +510,8 @@ public class BuyerAccessibilityService extends AccessibilityService {
         if (!state().getBoolean("address_filled", false)) {
             String[] labels = ruleLabels("addressLabels",
                     "address line 1", "address", "house no", "house number", "ที่อยู่", "บ้านเลขที่");
-            AccessibilityNodeInfo field = findFieldForLabel(root, labels);
+            AccessibilityNodeInfo field = findResourceId(root, "form_MMID_address1", true);
+            if (field == null) field = findFieldForLabel(root, labels);
             if (field != null) {
                 if (setNodeTextVerified(field, "888")) {
                     state().edit().putBoolean("address_filled", true).apply();
@@ -512,7 +527,8 @@ public class BuyerAccessibilityService extends AccessibilityService {
         if (!state().getBoolean("zip_filled", false)) {
             String[] labels = ruleLabels("postalCodeLabels",
                     "zip code", "postal code", "postcode", "รหัสไปรษณีย์");
-            AccessibilityNodeInfo field = findFieldForLabel(root, labels);
+            AccessibilityNodeInfo field = findResourceId(root, "form_MMID_zipCode", true);
+            if (field == null) field = findFieldForLabel(root, labels);
             if (field != null) {
                 if (setNodeTextVerified(field, "20000")) {
                     state().edit().putBoolean("zip_filled", true).apply();
@@ -650,10 +666,14 @@ public class BuyerAccessibilityService extends AccessibilityService {
             return;
         }
 
-        AccessibilityNodeInfo control = findControlForLabel(root, labels);
+        String controlId = type.equals("district") ? "form_REG_district_id" :
+                type.equals("subdistrict") ? "form_REG_subDistrict_id" : "form_REG_province_id";
+        AccessibilityNodeInfo control = findResourceId(root, controlId, true);
+        if (control == null) control = findControlForLabel(root, labels);
         AccessibilityNodeInfo button = findClickableAncestor(control, null);
-        if (button != null && isReasonableAction(button) &&
-                button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+        if ((button != null && isReasonableAction(button) &&
+                button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) ||
+                (control != null && control.performAction(AccessibilityNodeInfo.ACTION_CLICK))) {
             state().edit().putBoolean(openKey, true).putString(fingerprintKey, screenFingerprint(root))
                     .putLong(timeKey, System.currentTimeMillis())
                     .putInt(attemptsKey, state().getInt(attemptsKey, 0) + 1)
@@ -1131,7 +1151,12 @@ public class BuyerAccessibilityService extends AccessibilityService {
         int supportingEvidence = (productEvidence ? 1 : 0) + (totalEvidence ? 1 : 0) +
                 (actionEvidence ? 1 : 0);
         if (heading && supportingEvidence >= 2) {
-            setStep(DONE, "ยืนยันหัวข้อหน้าตะกร้าและองค์ประกอบหน้าตะกร้าอีกอย่างน้อย 2 อย่างแล้ว");
+            if (clickResourceId(root, "btn_go_to_checkout")) {
+                state().edit().putLong("checkout_clicked_at", System.currentTimeMillis()).apply();
+                setStep(CHECKOUT, "ยืนยันตะกร้าแล้ว กด Checkout ด้วย ID จริง กำลังรอหน้าสรุปคำสั่งซื้อ");
+            } else {
+                setStatus("พบตะกร้าแล้ว แต่ยังไม่พบปุ่ม btn_go_to_checkout ที่กดได้");
+            }
             return;
         }
         long clickedAt = state().getLong("cart_open_clicked_at", 0L);
@@ -1141,6 +1166,40 @@ public class BuyerAccessibilityService extends AccessibilityService {
         }
         setStatus("กำลังตรวจหน้าตะกร้า: หัวข้อ=" + heading + ", สินค้า=" +
                 productEvidence + ", ยอดรวม=" + totalEvidence + ", ปุ่มดำเนินการ=" + actionEvidence);
+    }
+
+    private void doCheckout(AccessibilityNodeInfo root) {
+        if (findResourceId(root, "btn_go_to_payment", false) != null) {
+            if (clickResourceId(root, "btn_go_to_payment")) {
+                setStep(PAYMENT, "อยู่หน้าสรุปคำสั่งซื้อแล้ว กดไปหน้าชำระเงินด้วย ID จริง");
+            } else setStatus("พบ btn_go_to_payment แต่คลิกไม่ได้");
+            return;
+        }
+        if (hasAny(root, "payment", "ชำระเงิน", "วิธีการชำระเงิน", "place order")) {
+            setStep(PAYMENT, "พบหน้าชำระเงิน กำลังรอปุ่มชำระเงิน");
+            return;
+        }
+        long at = state().getLong("checkout_clicked_at", 0L);
+        if (at > 0L && System.currentTimeMillis() - at > 25000L) {
+            stopWith("กด Checkout แล้ว แต่ไม่พบหน้าสรุปคำสั่งซื้อหรือ btn_go_to_payment");
+        } else setStatus("กำลังรอหน้าสรุปคำสั่งซื้อหลัง Checkout");
+    }
+
+    private void doPayment(AccessibilityNodeInfo root) {
+        if (findResourceId(root, "btn_pay", false) != null) {
+            // Final payment is intentionally left for an explicit user tap because it
+            // creates an irreversible purchase and may require OTP/3-D Secure.
+            state().edit().putBoolean("running", false)
+                    .putString("status", "เตรียมคำสั่งซื้อถึงปุ่ม Pay แล้ว กรุณาตรวจยอดและกด Pay/ยืนยันด้วยตัวเอง").apply();
+            return;
+        }
+        if (findResourceId(root, "btn_credit_debit_card", false) != null) {
+            if (clickResourceId(root, "btn_credit_debit_card")) {
+                setStatus("เลือก Credit/Debit card แล้ว กำลังรอปุ่ม Pay");
+            } else setStatus("พบ btn_credit_debit_card แต่คลิกไม่ได้");
+            return;
+        }
+        setStatus("กำลังรอวิธีชำระเงินหรือปุ่ม Pay");
     }
 
     private boolean hasCartHeading(AccessibilityNodeInfo root) {
@@ -1241,6 +1300,34 @@ public class BuyerAccessibilityService extends AccessibilityService {
             }
         }
         return null;
+    }
+
+    private AccessibilityNodeInfo findResourceId(AccessibilityNodeInfo root, String id,
+                                                  boolean editableOnly) {
+        if (root == null || id == null || id.isEmpty()) return null;
+        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+        collectNodes(root, nodes, 0);
+        for (AccessibilityNodeInfo node : nodes) {
+            if (!node.isVisibleToUser()) continue;
+            String actual = node.getViewIdResourceName();
+            if (id.equals(actual) && (!editableOnly || node.isEditable())) return node;
+        }
+        return null;
+    }
+
+    private AccessibilityNodeInfo findResourceIdAny(AccessibilityNodeInfo root, String... ids) {
+        for (String id : ids) {
+            AccessibilityNodeInfo node = findResourceId(root, id, false);
+            if (node != null) return node;
+        }
+        return null;
+    }
+
+    private boolean clickResourceId(AccessibilityNodeInfo root, String... ids) {
+        AccessibilityNodeInfo node = findResourceIdAny(root, ids);
+        if (node == null) return false;
+        if (node.isEnabled() && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true;
+        return clickNodeOrTap(node);
     }
 
     private AccessibilityNodeInfo findOptionText(AccessibilityNodeInfo root, String... values) {
