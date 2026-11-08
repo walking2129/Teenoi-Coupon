@@ -19,6 +19,11 @@ import androidx.security.crypto.MasterKey;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public class BuyerAccessibilityService extends AccessibilityService {
     private static final int PHONE = 0;
@@ -37,6 +42,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
     @Override
     public void onServiceConnected() {
         super.onServiceConnected();
+        refreshRemoteRules();
         scheduleTick(600);
     }
 
@@ -177,7 +183,20 @@ public class BuyerAccessibilityService extends AccessibilityService {
             setStep(CARD, "เข้าสู่ระบบแล้ว");
             return;
         }
-        if (!hasPasswordField(root) && !hasAny(root, "password", "รหัสผ่าน")) return;
+
+        long clickedAt = state().getLong("login_clicked_at", 0L);
+        boolean passwordPage = hasPasswordField(root) || hasAny(root, "password", "รหัสผ่าน");
+        if (!passwordPage) {
+            if (clickedAt > 0L && System.currentTimeMillis() - clickedAt >= 1800L) {
+                if (hasAny(root, "incorrect password", "invalid password", "wrong password",
+                        "รหัสผ่านไม่ถูกต้อง", "เข้าสู่ระบบไม่สำเร็จ")) {
+                    stopWith("Makro แจ้งว่ารหัสผ่านไม่ถูกต้อง กรุณาตรวจข้อมูลก่อนเริ่มใหม่");
+                } else {
+                    setStep(CARD, "หน้ารหัสผ่านปิดแล้ว กำลังตรวจหน้า Makro หลัง Login");
+                }
+            }
+            return;
+        }
 
         String password = readCredentials("password");
         if (password.isEmpty()) {
@@ -185,13 +204,28 @@ public class BuyerAccessibilityService extends AccessibilityService {
             return;
         }
         AccessibilityNodeInfo field = findEditable(root, true);
-        if (field != null) setNodeText(field, password);
+        if (field == null || !setNodeText(field, password)) {
+            setStatus("พบหน้ารหัสผ่าน แต่ยังใส่รหัสผ่านในช่องไม่ได้");
+            return;
+        }
 
+        if (clickedAt > 0L && System.currentTimeMillis() - clickedAt < 4500L) {
+            setStatus("ส่งคำสั่ง Login แล้ว กำลังรอผลจาก Makro");
+            return;
+        }
+        int attempts = state().getInt("login_attempts", 0);
+        if (attempts >= 3) {
+            stopWith("ลองกด Login 3 ครั้งแล้วแต่หน้ารหัสผ่านยังไม่ปิด จึงหยุดเพื่อไม่กดซ้ำไม่สิ้นสุด");
+            return;
+        }
         if (clickAction(root, new String[]{"login", "log in", "sign in", "เข้าสู่ระบบ",
-                "ลงชื่อเข้าใช้", "ล็อกอิน"}, true)) {
-            setStep(CARD, "กรอกรหัสผ่านแล้ว กด Login แล้ว กำลังรอหน้าแรก");
+                "ลงชื่อเข้าใช้", "ล็อกอิน"}, false)) {
+            state().edit().putLong("login_clicked_at", System.currentTimeMillis())
+                    .putInt("login_attempts", attempts + 1)
+                    .putString("status", "กดปุ่ม Login แล้ว กำลังรอให้ Makro ยืนยันผล")
+                    .apply();
         } else {
-            setStatus("กรอกรหัสผ่านแล้ว แต่ยังหาปุ่ม Login ไม่พบ");
+            setStatus("กรอกรหัสผ่านแล้ว แต่ยังจับปุ่ม Login โดยตรงไม่พบ — ไม่แตะปุ่มอื่นแทน");
         }
     }
 
@@ -260,112 +294,203 @@ public class BuyerAccessibilityService extends AccessibilityService {
     }
 
     private void doPassportForm(AccessibilityNodeInfo root) {
-        boolean passportDone = state().getBoolean("passport_number_filled", false);
-        boolean dobDone = state().getBoolean("dob_filled", false);
-        boolean refDone = state().getBoolean("referrer_filled", false);
-
-        String passportNumber = readCredentials("passport_number");
-        AccessibilityNodeInfo passportField = findFieldForLabel(root,
-                "passport number", "passport no", "passport no.", "passport number (as shown)",
-                "เลขที่หนังสือเดินทาง", "หมายเลขหนังสือเดินทาง");
-        if (!passportDone && passportField != null && !passportNumber.isEmpty() &&
-                setNodeText(passportField, passportNumber)) {
-            passportDone = true;
-            state().edit().putBoolean("passport_number_filled", true).apply();
-        }
-
-        AccessibilityNodeInfo dob = findFieldForLabel(root,
-                "date of birth", "dob", "วันเดือนปีเกิด", "วันเกิด");
-        if (!dobDone && dob != null && setNodeText(dob, "21/11/1986")) {
-            dobDone = true;
-            state().edit().putBoolean("dob_filled", true).apply();
-        }
-
-        AccessibilityNodeInfo referrer = findFieldForLabel(root,
-                "referrer code", "referral code", "referrer", "referral",
-                "รหัสผู้แนะนำ", "รหัสแนะนำ");
-        if (!refDone && referrer != null && setNodeText(referrer, "WIEX2PIW")) {
-            refDone = true;
-            state().edit().putBoolean("referrer_filled", true).apply();
-        }
-
-        if (passportDone && dobDone && refDone) {
-            AccessibilityNodeInfo addAddress = findOptionText(root,
-                    "add address", "เพิ่มที่อยู่");
-            if (addAddress != null && clickNodeOrTap(addAddress)) {
-                state().edit().putBoolean("address_filled", false)
-                        .putBoolean("zip_filled", false)
-                        .putBoolean("district_selected", false)
-                        .putBoolean("subdistrict_selected", false)
-                        .putInt("district_open_attempts", 0)
-                        .putInt("subdistrict_open_attempts", 0)
-                        .putInt("address_scrolls", 0).apply();
-                setStep(ADDRESS, "กรอก Passport number, วันเกิด และ Referrer code แล้ว — กด Add address");
+        if (!state().getBoolean("passport_number_filled", false)) {
+            String number = readCredentials("passport_number");
+            if (number.isEmpty()) { stopWith("ไม่พบเลข Passport ที่บันทึกไว้"); return; }
+            String[] labels = ruleLabels("passportNumberLabels",
+                    "passport number", "passport no", "passport no.", "passport number (as shown)",
+                    "เลขที่หนังสือเดินทาง", "หมายเลขหนังสือเดินทาง");
+            AccessibilityNodeInfo field = findFieldForLabel(root, labels);
+            if (field != null) {
+                if (setNodeTextVerified(field, number)) {
+                    state().edit().putBoolean("passport_number_filled", true).apply();
+                    setStatus("กรอก Passport number และตรวจค่าจากช่องแล้ว");
+                } else {
+                    setStatus("พบช่อง Passport number แต่ยังยืนยันค่าไม่ได้ — ไม่กรอกช่อง First name แทน");
+                }
                 return;
             }
-        }
-
-        int scrolls = state().getInt("form_scrolls", 0);
-        AccessibilityNodeInfo scrollable = findScrollable(root);
-        if (scrolls < 10 && ((scrollable != null &&
-                scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) ||
-                swipeUp())) {
-            String message;
-            if (!passportDone) message = "กำลังค้นหาช่อง Passport number";
-            else if (!dobDone) message = "กำลังค้นหาช่อง Date of birth";
-            else if (!refDone) message = "กำลังค้นหาช่อง Referrer code";
-            else message = "เลื่อนหา Add address";
-            state().edit().putInt("form_scrolls", scrolls + 1)
-                    .putString("status", message).apply();
+            scrollPassportForm(root, "กำลังค้นหาช่อง Passport number โดยไม่แตะช่อง First name");
             return;
         }
 
-        if (!passportDone) {
-            setStatus("ยังไม่พบช่อง Passport number — ตรวจว่าหน้าจอแบบฟอร์ม Passport เปิดอยู่");
-        } else if (!dobDone) {
-            setStatus("ยังไม่พบช่อง Date of birth");
-        } else if (!refDone) {
-            setStatus("ยังไม่พบช่อง Referrer code");
+        if (!state().getBoolean("dob_filled", false)) {
+            if (handleDateOfBirth(root)) return;
+            scrollPassportForm(root, "กำลังค้นหาช่อง Date of birth");
+            return;
+        }
+
+        if (!state().getBoolean("referrer_filled", false)) {
+            String[] labels = ruleLabels("referrerCodeLabels",
+                    "referrer code", "referral code", "referrer", "referral",
+                    "รหัสผู้แนะนำ", "รหัสแนะนำ");
+            AccessibilityNodeInfo field = findFieldForLabel(root, labels);
+            if (field != null) {
+                // WIEX2PIW is already confirmed by the user to be in the correct Referral code field.
+                if (setNodeTextVerified(field, "WIEX2PIW")) {
+                    state().edit().putBoolean("referrer_filled", true).apply();
+                    setStatus("กรอก WIEX2PIW ในช่อง Referral code และตรวจค่าจากช่องแล้ว");
+                } else {
+                    setStatus("พบช่อง Referral code แต่ยังยืนยันค่าไม่ได้ — ไม่ย้ายโค้ดไปช่องอื่น");
+                }
+                return;
+            }
+            scrollPassportForm(root, "กำลังค้นหาช่อง Referral code");
+            return;
+        }
+
+        AccessibilityNodeInfo addAddress = findOptionText(root, "add address", "เพิ่มที่อยู่");
+        if (addAddress != null && clickNodeOrTap(addAddress)) {
+            state().edit().putBoolean("address_filled", false)
+                    .putBoolean("zip_filled", false)
+                    .putBoolean("district_selected", false)
+                    .putBoolean("subdistrict_selected", false)
+                    .putInt("district_open_attempts", 0)
+                    .putInt("subdistrict_open_attempts", 0)
+                    .putInt("address_scrolls", 0)
+                    .remove("address_scroll_fingerprint").apply();
+            setStep(ADDRESS, "ข้อมูล Passport และ Referral code ผ่านการตรวจแล้ว — กด Add address");
+            return;
+        }
+        setStatus("ข้อมูล Passport ครบแล้ว กำลังค้นหาปุ่ม Add address");
+    }
+
+    private boolean handleDateOfBirth(AccessibilityNodeInfo root) {
+        String[] labels = ruleLabels("dateOfBirthLabels",
+                "date of birth", "dob", "วันเดือนปีเกิด", "วันเกิด");
+        AccessibilityNodeInfo field = findFieldForLabel(root, labels);
+        if (field != null) {
+            if (dateTextMatches(textOf(field), "21/11/1986")) {
+                state().edit().putBoolean("dob_filled", true).apply();
+                setStatus("ตรวจพบวันเกิด 21/11/1986 ในช่อง Date of birth แล้ว");
+                return true;
+            }
+            if (field.isEditable() && setNodeTextVerified(field, "21/11/1986")) {
+                state().edit().putBoolean("dob_filled", true).apply();
+                setStatus("กรอกวันเกิดและตรวจค่าจากช่องแล้ว");
+                return true;
+            }
+            if (!state().getBoolean("dob_picker_opened", false) && clickNodeOrTap(field)) {
+                state().edit().putBoolean("dob_picker_opened", true)
+                        .putString("status", "เปิดตัวเลือกวันเกิดแล้ว กำลังตรวจปฏิทิน").apply();
+                return true;
+            }
+        }
+
+        if (state().getBoolean("dob_picker_opened", false)) {
+            AccessibilityNodeInfo textMode = findText(root,
+                    "switch to text input mode", "text input mode", "ป้อนวันที่");
+            if (textMode != null && clickNodeOrTap(textMode)) {
+                setStatus("เปลี่ยนปฏิทินเป็นช่องป้อนวันที่แล้ว");
+                return true;
+            }
+            AccessibilityNodeInfo dateInput = findDatePickerInput(root);
+            if (dateInput != null && setNodeTextVerified(dateInput, "11/21/1986")) {
+                if (clickExactAction(root, new String[]{"ok", "done", "confirm", "ตกลง", "ยืนยัน"})) {
+                    setStatus("ใส่วันเกิดในปฏิทินแล้ว กำลังตรวจบนแบบฟอร์ม");
+                } else {
+                    setStatus("ใส่วันเกิดในตัวเลือกแล้ว กำลังรอปุ่มยืนยัน");
+                }
+                return true;
+            }
+            setStatus("เปิดตัวเลือกวันเกิดแล้ว แต่ไม่มีช่องป้อนวันที่ที่ระบุได้ — หยุดไว้ ไม่ปัดหรือกรอกช่องอื่น");
+            return true;
+        }
+
+        AccessibilityNodeInfo control = findControlForLabel(root, labels);
+        if (control != null && clickNodeOrTap(control)) {
+            state().edit().putBoolean("dob_picker_opened", true)
+                    .putString("status", "แตะช่อง Date of birth แล้ว กำลังเปิดปฏิทิน").apply();
+            return true;
+        }
+        return false;
+    }
+
+    private AccessibilityNodeInfo findDatePickerInput(AccessibilityNodeInfo root) {
+        List<AccessibilityNodeInfo> fields = editableNodes(root);
+        for (AccessibilityNodeInfo field : fields) {
+            String descriptor = fieldDescriptor(field).toLowerCase(Locale.ROOT);
+            if (descriptor.contains("date") || descriptor.contains("day") ||
+                    descriptor.contains("month") || descriptor.contains("year")) return field;
+        }
+        if (fields.size() == 1 && hasAny(root, "switch to text input mode",
+                "select date", "choose date", "เลือกวันที่")) return fields.get(0);
+        return null;
+    }
+
+    private boolean dateTextMatches(String actual, String expected) {
+        String a = actual == null ? "" : actual.trim().toLowerCase(Locale.ROOT);
+        String e = expected.trim().toLowerCase(Locale.ROOT);
+        if (a.equals(e)) return true;
+        String da = a.replaceAll("[^0-9]", "");
+        String de = e.replaceAll("[^0-9]", "");
+        return !da.isEmpty() && da.equals(de);
+    }
+
+    private void scrollPassportForm(AccessibilityNodeInfo root, String message) {
+        int count = state().getInt("form_scrolls", 0);
+        String fingerprint = screenFingerprint(root);
+        String previous = state().getString("form_scroll_fingerprint", "");
+        if (count > 0 && fingerprint.equals(previous)) {
+            stopWith(message + " — หน้าจอไม่เปลี่ยนหลังเลื่อน จึงหยุดแทนการปัดซ้ำ");
+            return;
+        }
+        if (count >= 4) {
+            stopWith(message + " — เลื่อน 4 ครั้งแล้วยังไม่พบช่อง จึงหยุดโดยไม่กรอกผิดช่อง");
+            return;
+        }
+        AccessibilityNodeInfo scrollable = findScrollable(root);
+        boolean moved = scrollable != null &&
+                scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+        if (!moved && count < 2) moved = swipeUp();
+        if (moved) {
+            state().edit().putInt("form_scrolls", count + 1)
+                    .putString("form_scroll_fingerprint", fingerprint)
+                    .putString("status", message).apply();
         } else {
-            setStatus("กรอกข้อมูล Passport แล้ว กำลังหา Add address");
+            setStatus(message + " — ไม่พบส่วนที่เลื่อนได้ จึงรอโดยไม่ปัดซ้ำ");
         }
     }
 
     private void doAddress(AccessibilityNodeInfo root) {
-        boolean addressDone = state().getBoolean("address_filled", false);
-        boolean zipDone = state().getBoolean("zip_filled", false);
-
-        AccessibilityNodeInfo address = findFieldForLabel(root,
-                "address", "house no", "house number", "ที่อยู่", "บ้านเลขที่");
-        if (!addressDone && address != null && setNodeText(address, "888")) {
-            addressDone = true;
-            state().edit().putBoolean("address_filled", true).apply();
-        }
-
-        AccessibilityNodeInfo zip = findFieldForLabel(root,
-                "zip code", "postal code", "postcode", "รหัสไปรษณีย์");
-        if (!zipDone && zip != null && setNodeText(zip, "20000")) {
-            zipDone = true;
-            state().edit().putBoolean("zip_filled", true).apply();
-        }
-
-        if (!addressDone || !zipDone) {
-            scrollAddressForm(root, "กำลังค้นหาช่อง Address และ Zip code");
+        if (!state().getBoolean("address_filled", false)) {
+            AccessibilityNodeInfo address = findFieldForLabel(root, ruleLabels("addressLabels",
+                    "address", "address line 1", "house no", "house number", "ที่อยู่", "บ้านเลขที่"));
+            if (address != null) {
+                if (setNodeTextVerified(address, "888")) {
+                    state().edit().putBoolean("address_filled", true).apply();
+                    setStatus("กรอก Address และตรวจค่าจากช่องแล้ว");
+                } else setStatus("พบช่อง Address แต่ยืนยันค่าไม่ได้ — ไม่กรอกช่องอื่นแทน");
+                return;
+            }
+            scrollAddressForm(root, "กำลังค้นหาช่อง Address");
             return;
         }
 
-        boolean districtDone = state().getBoolean("district_selected", false);
-        if (!districtDone) {
+        if (!state().getBoolean("zip_filled", false)) {
+            AccessibilityNodeInfo zip = findFieldForLabel(root, ruleLabels("postalCodeLabels",
+                    "zip code", "postal code", "postcode", "รหัสไปรษณีย์"));
+            if (zip != null) {
+                if (setNodeTextVerified(zip, "20000")) {
+                    state().edit().putBoolean("zip_filled", true).apply();
+                    setStatus("กรอก Zip code และตรวจค่าจากช่องแล้ว");
+                } else setStatus("พบช่อง Zip code แต่ยืนยันค่าไม่ได้");
+                return;
+            }
+            scrollAddressForm(root, "กำลังค้นหาช่อง Zip code");
+            return;
+        }
+
+        if (!state().getBoolean("district_selected", false)) {
             AccessibilityNodeInfo option = findOptionText(root,
-                    "mueang chon buri", "เมืองชลบุรี");
+                    ruleLabels("districtOptions", "mueang chon buri", "เมืองชลบุรี"));
             if (option != null && clickNodeOrTap(option)) {
                 state().edit().putBoolean("district_selected", true)
                         .putString("status", "เลือก District: Mueang Chon Buri แล้ว").apply();
                 return;
             }
-
             AccessibilityNodeInfo control = findControlForLabel(root,
-                    "district", "อำเภอ");
+                    ruleLabels("districtLabels", "district", "อำเภอ"));
             int attempts = state().getInt("district_open_attempts", 0);
             if (control != null && attempts < 3 && clickNodeOrTap(control)) {
                 state().edit().putInt("district_open_attempts", attempts + 1)
@@ -376,18 +501,16 @@ public class BuyerAccessibilityService extends AccessibilityService {
             return;
         }
 
-        boolean subdistrictDone = state().getBoolean("subdistrict_selected", false);
-        if (!subdistrictDone) {
+        if (!state().getBoolean("subdistrict_selected", false)) {
             AccessibilityNodeInfo option = findOptionText(root,
-                    "bang pla soi", "bang pla soy", "บางปลาสร้อย");
+                    ruleLabels("subdistrictOptions", "bang pla soi", "bang pla soy", "บางปลาสร้อย"));
             if (option != null && clickNodeOrTap(option)) {
                 state().edit().putBoolean("subdistrict_selected", true)
                         .putString("status", "เลือก Sub-district: Bang Pla Soi แล้ว").apply();
                 return;
             }
-
             AccessibilityNodeInfo control = findControlForLabel(root,
-                    "sub-district", "subdistrict", "ตำบล");
+                    ruleLabels("subdistrictLabels", "sub-district", "subdistrict", "ตำบล"));
             int attempts = state().getInt("subdistrict_open_attempts", 0);
             if (control != null && attempts < 3 && clickNodeOrTap(control)) {
                 state().edit().putInt("subdistrict_open_attempts", attempts + 1)
@@ -422,17 +545,43 @@ public class BuyerAccessibilityService extends AccessibilityService {
 
     private void scrollAddressForm(AccessibilityNodeInfo root, String message) {
         int scrolls = state().getInt("address_scrolls", 0);
-        AccessibilityNodeInfo scrollable = findScrollable(root);
-        if (scrolls < 8 && ((scrollable != null &&
-                scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) ||
-                swipeUp())) {
-            state().edit().putInt("address_scrolls", scrolls + 1)
-                    .putString("status", message).apply();
-        } else if (scrolls >= 8) {
-            stopWith(message + " — ยังไม่พบช่องหรือรายการที่ต้องเลือก กรุณาตรวจหน้าจอ");
-        } else {
-            setStatus(message);
+        String fingerprint = screenFingerprint(root);
+        String previous = state().getString("address_scroll_fingerprint", "");
+        if (scrolls > 0 && fingerprint.equals(previous)) {
+            stopWith(message + " — หน้าจอไม่เปลี่ยนหลังเลื่อน จึงหยุดแทนการปัดซ้ำ");
+            return;
         }
+        if (scrolls >= 3) {
+            stopWith(message + " — เลื่อน 3 ครั้งแล้วยังไม่พบช่อง จึงหยุดโดยไม่กรอกข้อมูลผิด");
+            return;
+        }
+        AccessibilityNodeInfo scrollable = findScrollable(root);
+        boolean moved = scrollable != null &&
+                scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+        if (!moved && scrolls < 2) moved = swipeUp();
+        if (moved) {
+            state().edit().putInt("address_scrolls", scrolls + 1)
+                    .putString("address_scroll_fingerprint", fingerprint)
+                    .putString("status", message).apply();
+        } else {
+            setStatus(message + " — ไม่พบส่วนที่เลื่อนได้ จึงรอโดยไม่ปัดซ้ำ");
+        }
+    }
+
+    private String screenFingerprint(AccessibilityNodeInfo root) {
+        StringBuilder out = new StringBuilder();
+        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+        collectNodes(root, nodes, 0);
+        for (AccessibilityNodeInfo node : nodes) {
+            if (!node.isVisibleToUser() || node.isEditable()) continue;
+            String label = textOf(node).trim();
+            if (!label.isEmpty()) out.append(label).append('|');
+            Rect bounds = new Rect();
+            node.getBoundsInScreen(bounds);
+            out.append(bounds.top).append(',').append(bounds.bottom).append(';');
+            if (out.length() > 1800) break;
+        }
+        return out.toString();
     }
 
     private AccessibilityNodeInfo findExactText(AccessibilityNodeInfo root, String... values) {
@@ -527,65 +676,141 @@ public class BuyerAccessibilityService extends AccessibilityService {
         collectNodes(root, all, 0);
         List<AccessibilityNodeInfo> fields = editableNodes(root);
 
-        // First prefer a text field whose own hint/description names the field.
-        // Match whole label phrases so "District" never accidentally matches
-        // the different field "Sub-district".
+        // Prefer an input whose own non-value metadata identifies the target.
         for (AccessibilityNodeInfo field : fields) {
-            String own = textOf(field).toLowerCase(Locale.ROOT).trim()
+            String own = fieldDescriptor(field).toLowerCase(Locale.ROOT).trim()
                     .replaceAll("\\s+", " ");
+            if (own.isEmpty() || isConflictingField(own, labels)) continue;
             for (String label : labels) {
                 String wanted = label.toLowerCase(Locale.ROOT).trim();
                 if (own.equals(wanted) || own.startsWith(wanted + " ") ||
-                        own.startsWith(wanted + ":") || own.endsWith(" " + wanted) ||
-                        own.contains(" " + wanted + ":") ||
+                        own.startsWith(wanted + ":") || own.contains("/" + wanted) ||
+                        own.contains("_" + wanted.replace(' ', '_')) ||
                         own.contains(" " + wanted + " ")) return field;
             }
         }
 
-        // Otherwise associate the visible field label with the nearest editable
-        // control directly below it, preferring horizontal alignment.
+        // Otherwise only accept an input directly below the exact label and in the same column.
         AccessibilityNodeInfo best = null;
         long bestScore = Long.MAX_VALUE;
         for (AccessibilityNodeInfo labelNode : all) {
-            if (!labelNode.isVisibleToUser()) continue;
-            String labelText = textOf(labelNode).toLowerCase(Locale.ROOT).trim();
+            if (!labelNode.isVisibleToUser() || labelNode.isEditable()) continue;
+            String labelText = textOf(labelNode).toLowerCase(Locale.ROOT).trim()
+                    .replaceAll("\\s+", " ");
             boolean matches = false;
             for (String label : labels) {
                 String wanted = label.toLowerCase(Locale.ROOT).trim();
-                if (labelText.equals(wanted) || labelText.startsWith(wanted + " ")) {
+                if (labelText.equals(wanted) || labelText.equals(wanted + "*") ||
+                        labelText.equals(wanted + " *") || labelText.startsWith(wanted + ":")) {
                     matches = true;
                     break;
                 }
             }
             if (!matches) continue;
-
             Rect labelBounds = new Rect();
             labelNode.getBoundsInScreen(labelBounds);
             if (labelBounds.isEmpty()) continue;
 
             for (AccessibilityNodeInfo field : fields) {
                 if (!field.isVisibleToUser() || !field.isEnabled()) continue;
+                if (isConflictingField(fieldDescriptor(field).toLowerCase(Locale.ROOT), labels)) continue;
                 Rect fieldBounds = new Rect();
                 field.getBoundsInScreen(fieldBounds);
                 if (fieldBounds.isEmpty()) continue;
-
-                int verticalGap = fieldBounds.top - labelBounds.bottom;
-                if (verticalGap < -dp(24) || verticalGap > dp(180)) continue;
-                int horizontalOverlap = Math.min(labelBounds.right, fieldBounds.right) -
+                int gap = fieldBounds.top - labelBounds.bottom;
+                if (gap < -dp(8) || gap > dp(110)) continue;
+                int overlap = Math.min(labelBounds.right, fieldBounds.right) -
                         Math.max(labelBounds.left, fieldBounds.left);
-                boolean aligned = horizontalOverlap > 0 ||
-                        Math.abs(labelBounds.centerX() - fieldBounds.centerX()) < dp(100);
-                if (!aligned) continue;
-
-                long score = (long) Math.max(0, verticalGap) * 1000L +
+                if (overlap <= dp(12) &&
+                        Math.abs(labelBounds.centerX() - fieldBounds.centerX()) > dp(58)) continue;
+                long score = (long) Math.max(0, gap) * 1000L +
                         Math.abs(labelBounds.centerX() - fieldBounds.centerX());
-                if (score < bestScore) {
-                    bestScore = score;
-                    best = field;
-                }
+                if (score < bestScore) { bestScore = score; best = field; }
             }
         }
         return best;
+    }
+
+    private String fieldDescriptor(AccessibilityNodeInfo node) {
+        if (node == null) return "";
+        StringBuilder out = new StringBuilder();
+        if (android.os.Build.VERSION.SDK_INT >= 26 && node.getHintText() != null)
+            out.append(node.getHintText()).append(' ');
+        if (node.getContentDescription() != null) out.append(node.getContentDescription()).append(' ');
+        if (android.os.Build.VERSION.SDK_INT >= 18 && node.getViewIdResourceName() != null)
+            out.append(node.getViewIdResourceName()).append(' ');
+        return out.toString();
+    }
+
+    private boolean isConflictingField(String descriptor, String... targets) {
+        if (descriptor == null || descriptor.isEmpty()) return false;
+        String[] guards = {"first name", "given name", "middle name", "last name", "surname",
+                "phone", "mobile", "email", "date of birth", "referrer", "referral",
+                "address", "postal", "zip code", "district", "subdistrict"};
+        for (String guard : guards) {
+            if (!descriptor.contains(guard)) continue;
+            boolean target = false;
+            if (targets != null) for (String label : targets) {
+                if (label != null && (label.toLowerCase(Locale.ROOT).contains(guard) ||
+                        guard.contains(label.toLowerCase(Locale.ROOT)))) { target = true; break; }
+            }
+            if (!target) return true;
+        }
+        return false;
+    }
+
+    private String[] ruleLabels(String key, String... fallback) {
+        try {
+            String raw = state().getString("automation_rules_json", "{}");
+            JSONArray array = new JSONObject(raw).optJSONArray(key);
+            if (array == null || array.length() == 0) return fallback;
+            List<String> values = new ArrayList<>();
+            for (int i = 0; i < array.length(); i++) {
+                String value = array.optString(i, "").trim();
+                if (!value.isEmpty()) values.add(value);
+            }
+            return values.isEmpty() ? fallback : values.toArray(new String[0]);
+        } catch (Exception ignored) { return fallback; }
+    }
+
+    private void refreshRemoteRules() {
+        long now = System.currentTimeMillis();
+        if (now - state().getLong("automation_rules_attempt", 0L) < 60_000L) return;
+        state().edit().putLong("automation_rules_attempt", now).apply();
+        Thread worker = new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                URL url = new URL("https://walking2129.github.io/Teenoi-Coupon/update-server/automation.json?t=" + now);
+                if (!"https".equalsIgnoreCase(url.getProtocol()) ||
+                        !"walking2129.github.io".equalsIgnoreCase(url.getHost())) return;
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setConnectTimeout(8000);
+                connection.setReadTimeout(8000);
+                connection.setUseCaches(false);
+                connection.setRequestProperty("Cache-Control", "no-cache");
+                if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) return;
+                StringBuilder body = new StringBuilder();
+                try (InputStream input = connection.getInputStream()) {
+                    byte[] buffer = new byte[2048];
+                    int count;
+                    while ((count = input.read(buffer)) != -1) {
+                        if (body.length() > 48000) return;
+                        body.append(new String(buffer, 0, count, "UTF-8"));
+                    }
+                }
+                JSONObject rules = new JSONObject(body.toString());
+                if (rules.optInt("schemaVersion", 0) == 1) {
+                    state().edit().putString("automation_rules_json", body.toString())
+                            .putLong("automation_rules_fetched", System.currentTimeMillis()).apply();
+                }
+            } catch (Exception ignored) {
+                // Last-known-good rules are retained when the network is unavailable.
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }, "KimAutoBuyer-RemoteRules");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private AccessibilityNodeInfo findScrollable(AccessibilityNodeInfo root) {
@@ -638,6 +863,16 @@ public class BuyerAccessibilityService extends AccessibilityService {
         Bundle args = new Bundle();
         args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value);
         return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+    }
+
+    private boolean setNodeTextVerified(AccessibilityNodeInfo node, String value) {
+        if (node == null || !node.isEditable() || value == null) return false;
+        if (!setNodeText(node, value)) return false;
+        try {
+            node.refresh();
+            CharSequence actual = node.getText();
+            return actual != null && actual.toString().trim().equals(value.trim());
+        } catch (Exception ignored) { return false; }
     }
 
     private boolean clickAction(AccessibilityNodeInfo root, String[] matches, boolean bottomFallback) {
@@ -767,13 +1002,22 @@ public class BuyerAccessibilityService extends AccessibilityService {
         int clickable = 0;
         int editable = 0;
         StringBuilder labels = new StringBuilder();
+        StringBuilder fieldHints = new StringBuilder();
         List<AccessibilityNodeInfo> nodes = new ArrayList<>();
         collectNodes(root, nodes, 0);
         for (AccessibilityNodeInfo n : nodes) {
             if (n.isClickable()) clickable++;
-            if (n.isEditable()) editable++;
-            // Editable controls may contain private user-entered values.
-            // Keep them out of diagnostic text stored in ordinary preferences.
+            if (n.isEditable()) {
+                editable++;
+                // Only non-sensitive accessibility metadata is logged, never entered values.
+                String hint = fieldDescriptor(n).trim();
+                Rect bounds = new Rect();
+                n.getBoundsInScreen(bounds);
+                if (fieldHints.length() < 850) fieldHints.append(" {")
+                        .append(hint.isEmpty() ? n.getClassName() : hint)
+                        .append("@").append(bounds.left).append(",").append(bounds.top)
+                        .append(",").append(bounds.right).append(",").append(bounds.bottom).append("}");
+            }
             if (!n.isEditable() && (n.isClickable() || n.isCheckable())) {
                 String label = textOf(n).trim();
                 if (!label.isEmpty() && labels.length() < 500) labels.append(" [").append(label).append("]");
@@ -781,7 +1025,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
         }
         String pkg = root.getPackageName() == null ? "?" : root.getPackageName().toString();
         String debug = "package=" + pkg + ", step=" + step + ", clickable=" + clickable +
-                ", editable=" + editable + ", controls=" + labels;
+                ", editable=" + editable + ", fields=" + fieldHints + ", controls=" + labels;
         state().edit().putString("last_debug", debug).apply();
     }
 

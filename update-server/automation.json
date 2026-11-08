@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "rulesVersion": "2026-11-08.1",
+  "passportNumberLabels": [
+    "passport number",
+    "passport no",
+    "passport no.",
+    "passport number (as shown)",
+    "เลขที่หนังสือเดินทาง",
+    "หมายเลขหนังสือเดินทาง"
+  ],
+  "dateOfBirthLabels": [
+    "date of birth",
+    "dob",
+    "วันเดือนปีเกิด",
+    "วันเกิด"
+  ],
+  "referrerCodeLabels": [
+    "referrer code",
+    "referral code",
+    "referrer",
+    "referral",
+    "รหัสผู้แนะนำ",
+    "รหัสแนะนำ"
+  ],
+  "addressLabels": [
+    "address",
+    "address line 1",
+    "house no",
+    "house number",
+    "ที่อยู่",
+    "บ้านเลขที่"
+  ],
+  "postalCodeLabels": [
+    "zip code",
+    "postal code",
+    "postcode",
+    "รหัสไปรษณีย์"
+  ],
+  "districtLabels": [
+    "district",
+    "อำเภอ"
+  ],
+  "districtOptions": [
+    "mueang chon buri",
+    "เมืองชลบุรี"
+  ],
+  "subdistrictLabels": [
+    "sub-district",
+    "subdistrict",
+    "ตำบล"
+  ],
+  "subdistrictOptions": [
+    "bang pla soi",
+    "bang pla soy",
+    "บางปลาสร้อย"
+  ]
+}
