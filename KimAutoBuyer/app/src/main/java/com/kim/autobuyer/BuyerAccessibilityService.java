@@ -167,10 +167,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
             return;
         }
 
-        // Some home-screen builds expose the top-right Login control without a label.
-        if (tapTopRightLogin(root)) {
-            setStatus("แตะบริเวณปุ่ม Login มุมขวาบนแล้ว กำลังรอหน้ากรอกเบอร์/อีเมล");
-        }
+        // Never guess a coordinate for an unlabeled control: it may be Back or Close.
+        // Wait safely for a clearly identified Login control instead.
+        setStatus("ยังไม่พบปุ่ม Login ที่ระบุได้ชัดเจน — รอหน้าจอ Makro โดยไม่แตะปุ่มอื่น");
     }
 
     private void doPassword(AccessibilityNodeInfo root) {
@@ -736,30 +735,6 @@ public class BuyerAccessibilityService extends AccessibilityService {
             return tap(r.centerX(), r.centerY());
         }
         return false;
-    }
-
-    private boolean tapTopRightLogin(AccessibilityNodeInfo root) {
-        int screenW = getResources().getDisplayMetrics().widthPixels;
-        int screenH = getResources().getDisplayMetrics().heightPixels;
-        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
-        collectNodes(root, nodes, 0);
-        AccessibilityNodeInfo best = null;
-        long bestScore = Long.MAX_VALUE;
-        for (AccessibilityNodeInfo n : nodes) {
-            if (!n.isVisibleToUser() || !n.isEnabled()) continue;
-            Rect r = new Rect();
-            n.getBoundsInScreen(r);
-            if (r.isEmpty() || r.width() > screenW * 0.45f || r.height() > dp(90)) continue;
-            if (r.centerX() < screenW * 0.72f || r.centerY() > screenH * 0.20f) continue;
-            // Prefer the smallest actionable item in the top-right corner.
-            long score = (long) r.width() * r.height() - (long) r.centerX() * 3L;
-            if (score < bestScore && (n.isClickable() || r.width() > dp(24))) {
-                bestScore = score;
-                best = n;
-            }
-        }
-        if (best == null) return false;
-        return clickNodeOrTap(best);
     }
 
     private boolean swipeUp() {
