@@ -4,7 +4,7 @@ Android accessibility helper for the user's own Makro PRO account and card appli
 
 ## Current app build
 
-- Version: 1.9 (versionCode 10)
+- Version: 2.0 (versionCode 11)
 - Android minSdk: 26
 - The in-app updater checks the public GitHub Pages manifest at:
   `https://walking2129.github.io/Teenoi-Coupon/update-server/latest.json`

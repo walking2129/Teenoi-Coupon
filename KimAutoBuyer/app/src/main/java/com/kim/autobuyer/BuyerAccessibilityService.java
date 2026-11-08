@@ -182,7 +182,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
                 return;
             }
             if (field != null) setNodeText(field, phone);
-            if (clickAction(root, new String[]{"continue", "ดำเนินการต่อ", "ถัดไป", "ยืนยัน"}, false)) {
+            if (clickAction(root, new String[]{"continue", "ดำเนินการต่อ", "ถัดไป", "ยืนยัน"}, true)) {
                 setStep(PASSWORD, "กรอกเบอร์/อีเมลแล้ว กด Continue แล้ว กำลังรอหน้ารหัสผ่าน");
             } else {
                 setStatus("กรอกเบอร์แล้ว แต่ยังหาปุ่ม Continue ไม่พบ — เก็บหน้าจอไว้ตรวจสอบ");
@@ -242,7 +242,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
             return;
         }
         if (clickAction(root, new String[]{"login", "log in", "sign in", "เข้าสู่ระบบ",
-                "ลงชื่อเข้าใช้", "ล็อกอิน"}, false)) {
+                "ลงชื่อเข้าใช้", "ล็อกอิน"}, true)) {
             state().edit().putLong("login_clicked_at", System.currentTimeMillis())
                     .putInt("login_attempts", attempts + 1)
                     .putString("status", "กดปุ่ม Login แล้ว กำลังรอให้ Makro ยืนยันผล")
@@ -266,19 +266,10 @@ public class BuyerAccessibilityService extends AccessibilityService {
     }
 
     private void doPersonal(AccessibilityNodeInfo root) {
-        // The old implementation jumped straight to PASSPORT whenever the word
-        // "Passport" was visible, even when Personal and Passport were both options.
-        AccessibilityNodeInfo personal = findText(root, "personal", "บุคคลธรรมดา");
-        if (personal != null) {
-            if (clickNodeOrTap(personal)) {
-                setStep(PASSPORT, "เลือก Personal แล้ว กำลังหาตัวเลือก Passport");
-            } else {
-                setStatus("พบ Personal แต่แตะเลือกไม่สำเร็จ");
-            }
-            return;
-        }
         if (hasAny(root, "passport", "หนังสือเดินทาง")) {
-            setStep(PASSPORT, "พบหน้าหรือรายการเลือก Passport");
+            setStep(PASSPORT, "Personal ถูกเลือกอยู่แล้ว กำลังเลือก Passport");
+        } else {
+            setStatus("กำลังรอตัวเลือก Passport บนหน้า Apply for Makro card");
         }
     }
 
@@ -297,7 +288,7 @@ public class BuyerAccessibilityService extends AccessibilityService {
         }
 
         AccessibilityNodeInfo passport = findText(root, "passport", "หนังสือเดินทาง");
-        if (passport != null && clickNodeOrTap(passport)) {
+        if (passport != null && clickPassportOption(root, passport)) {
             state().edit()
                     .putLong("passport_clicked_at", System.currentTimeMillis())
                     .putInt("passport_attempts", attempts + 1)
@@ -306,6 +297,31 @@ public class BuyerAccessibilityService extends AccessibilityService {
         } else {
             setStatus("ยังไม่พบปุ่ม/ตัวเลือก Passport ที่แตะได้");
         }
+    }
+
+    private boolean clickPassportOption(AccessibilityNodeInfo root, AccessibilityNodeInfo label) {
+        if (clickNodeOrTap(label)) return true;
+        Rect labelBounds = boundsOf(label);
+        if (labelBounds.isEmpty()) return false;
+        List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+        collectNodes(root, nodes, 0);
+        AccessibilityNodeInfo best = null;
+        long bestScore = Long.MAX_VALUE;
+        for (AccessibilityNodeInfo node : nodes) {
+            if (node == label || !node.isVisibleToUser() || !node.isEnabled() ||
+                    !(node.isClickable() || node.isCheckable())) continue;
+            Rect rect = boundsOf(node);
+            if (rect.isEmpty() || rect.width() > dp(180) || rect.height() > dp(120)) continue;
+            int vertical = Math.abs(rect.centerY() - labelBounds.centerY());
+            int horizontal = Math.abs(rect.centerX() - labelBounds.centerX());
+            if (vertical > dp(70) || horizontal > dp(260)) continue;
+            long score = (long) vertical * 1000L + horizontal;
+            if (score < bestScore) {
+                bestScore = score;
+                best = node;
+            }
+        }
+        return best != null && best.performAction(AccessibilityNodeInfo.ACTION_CLICK);
     }
 
     private boolean isPassportForm(AccessibilityNodeInfo root) {
@@ -407,12 +423,13 @@ public class BuyerAccessibilityService extends AccessibilityService {
         AccessibilityNodeInfo control = findControlForLabel(root, labels);
         if (control != null) {
             if (!state().getBoolean("dob_focus_requested", false)) {
+                boolean clicked = control.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                 boolean focused = control.performAction(AccessibilityNodeInfo.ACTION_FOCUS) ||
                         control.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
                 state().edit().putBoolean("dob_focus_requested", true)
                         .putLong("dob_focus_requested_at", System.currentTimeMillis()).apply();
-                setStatus(focused
-                        ? "โฟกัสช่องวันเกิดแล้ว กำลังอ่านช่องข้อความใหม่ โดยไม่เปิดปฏิทิน"
+                setStatus(clicked || focused
+                        ? "แตะ/โฟกัสช่องวันเกิดแล้ว กำลังอ่านช่องข้อความใหม่"
                         : "พบกรอบวันเกิดแต่โฟกัสไม่ได้ กำลังรอ input ข้อความโดยไม่เปิดปฏิทิน");
             } else {
                 long requestedAt = state().getLong("dob_focus_requested_at", 0L);
@@ -536,8 +553,9 @@ public class BuyerAccessibilityService extends AccessibilityService {
         AccessibilityNodeInfo control = findControlForLabel(root, labels);
         if (control == null) return false;
         if (!state().getBoolean(flag, false)) {
+            boolean clicked = control.performAction(AccessibilityNodeInfo.ACTION_CLICK);
             boolean focused = control.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
-            if (focused) {
+            if (clicked || focused) {
                 state().edit().putBoolean(flag, true)
                         .putLong(flag + "_time", System.currentTimeMillis()).apply();
                 setStatus("โฟกัสช่องข้อมูลแล้ว กำลังอ่าน Accessibility tree ใหม่");
