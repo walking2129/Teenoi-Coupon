@@ -4,7 +4,7 @@ Android accessibility helper for the user's own Makro PRO account and card appli
 
 ## Current app build
 
-- Version: 1.4 (versionCode 5)
+- Version: 1.9 (versionCode 10)
 - Android minSdk: 26
 - The in-app updater checks the public GitHub Pages manifest at:
   `https://walking2129.github.io/Teenoi-Coupon/update-server/latest.json`
@@ -30,7 +30,9 @@ The first installation signed with this permanent key must replace the currently
 4. Detect the password form and submit the normal password login button (it deliberately does not select Login with OTP).
 5. Find Apply for Makro Card, choose Personal, then choose Passport.
 6. Read the real Passport number supplied by the user in the local app field, then fill Passport number, Date of birth (21/11/1986), and Referrer code (WIEX2PIW).
-7. Tap Add address, fill Address 888 and Zip code 20000, select District Mueang Chon Buri and Sub-district Bang Pla Soi, tap Save, then tap Apply.
+7. Tap the actual Add address button, fill Address 888 and Postal code 20000, then select the first newly displayed District option and the first newly displayed Sub-district option. Save the address overlay, verify it closes, and then tap Apply.
+8. Wait for Home, fill the product search field with คาราบาว without pressing Search or Enter, then set only the first two CARABAO product rows to quantities 3 and 2 using their own + controls. Each increment is checked before another click.
+9. Use one Android Global Back action to return to Home, identify the top-right Cart control by its accessible label/resource ID (never by badge number alone), open it, and verify the cart screen before stopping.
 
 ## Device setup
 
@@ -43,4 +45,6 @@ For app updates, press **ตรวจสอบและติดตั้งอ�
 - Login details and the user's real passport number are encrypted at rest in Android Keystore-backed preferences; they are not embedded in source or APK.
 - The updater only accepts HTTPS URLs from the configured GitHub Pages host and checks the downloaded APK against the SHA-256 value in the update manifest before opening the installer.
 - Payment, OTP, identity verification, and any security challenge remain user-controlled.
-- Accessibility automation is an initial implementation and must still be verified against the current Makro PRO app version on the actual device. Dynamic date pickers, address dropdowns, or changed control labels may need adjustments.
+- Date of birth is entered as the text `21/11/1986`; the automation does not open a date picker. If the field is not exposed as a text input, it stops instead of selecting a calendar date.
+- Address, dropdown, product and Cart actions require a real accessible clickable control. The automation waits or stops when it cannot identify one safely; it does not infer the Cart from a numeric badge alone.
+- Accessibility automation must still be verified against the current Makro PRO app version on the actual device. Dynamic layouts, accessibility labels, and dropdown presentation can change.
